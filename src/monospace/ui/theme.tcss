@@ -1,0 +1,80 @@
+/* monospace.email — calm, high-contrast, works in 16 colours too. */
+
+Screen { background: $background; }
+
+#sidebar {
+    width: 30;
+    min-width: 18;
+    border-right: tall $panel;
+    background: $surface;
+}
+#sidebar Tree { background: $surface; padding: 0 1; }
+
+#content { width: 1fr; }
+
+#search {
+    display: none;
+    margin: 0 1;
+    border: tall $accent;
+}
+#search.visible { display: block; }
+
+MessageList { height: 45%; min-height: 6; border-bottom: tall $panel; }
+MessageList > .datatable--cursor { background: $accent 40%; }
+
+Reader { height: 1fr; padding: 0 2; }
+Reader #headers {
+    padding: 1 0 0 0;
+    border-bottom: dashed $panel;
+    margin-bottom: 1;
+    height: auto;
+}
+Reader #empty { color: $text-muted; padding: 2; }
+Reader Markdown { margin: 0; padding: 0; background: transparent; }
+Reader .note { color: $text-muted; text-style: italic; }
+
+ImageView { height: auto; width: auto; max-width: 100%; margin: 1 0; }
+ImageView .placeholder {
+    color: $text-muted;
+    border: round $panel;
+    padding: 0 1;
+    width: auto;
+}
+ImageView > Image { width: auto; height: auto; max-height: 30; }
+
+AttachmentBar { height: auto; padding: 1 0; }
+AttachmentBar Button { margin-right: 1; min-width: 10; }
+
+/* modals / forms */
+.form {
+    width: 90;
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    border: thick $accent;
+    background: $surface;
+    padding: 1 2;
+}
+.form Label { margin-top: 1; color: $text-muted; }
+.form .row { height: auto; margin-top: 1; }
+.form .row Button { margin-right: 1; }
+.form .hint { color: $text-muted; margin-top: 1; }
+.form .error { color: $error; margin-top: 1; }
+.form .url { background: $panel; padding: 0 1; margin-top: 1; }
+
+ComposeScreen, AccountAddScreen, OutboxScreen, ConfirmScreen { align: center middle; }
+ComposeScreen .form { width: 110; height: 90%; }
+ComposeScreen TextArea { height: 1fr; min-height: 8; margin-top: 1; }
+OutboxScreen .form { width: 110; height: 80%; }
+OutboxScreen DataTable { height: 10; }
+OutboxScreen #preview { height: 1fr; border: round $panel; padding: 0 1; }
+
+Reader MarkdownH1, Reader MarkdownH2, Reader MarkdownH3 {
+    content-align: left middle;
+    text-align: left;
+    margin: 1 0 0 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+Reader MarkdownH1 { text-style: bold; color: $accent; }

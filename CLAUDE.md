@@ -1,0 +1,54 @@
+# CLAUDE.md — monospace.email
+
+Terminal email client (Textual) + CLI + MCP server. Command `monospace`, package `monospace`,
+repo github.com/scaryshinyglasses/monospace.email (MIT, open source). Runs on macOS and
+headless Linux (no display, no keyring, `TERM=linux`) — keep it that way.
+
+## Commands
+
+```bash
+uv sync                       # once
+uv run monospace              # TUI (default command)
+uv run monospace doctor --offline
+uv run pytest                 # 35+ tests: core, SMTP (aiosmtpd), MCP (in-process Client), Textual pilot
+uv tool install --editable .  # `monospace` on PATH
+```
+
+## Architecture
+
+```
+src/monospace/
+  cli/          main.py (argparse dispatch, TUI default) · mail.py · accounts.py (+ `oauth`)
+                outbox.py · doctor.py · daemon.py (systemd/launchd) · output.py (json, interactive())
+  mcp_server.py MCPServer (mcp 2.x — FastMCP was renamed) tools wrapping core.service
+  core/         ← NO UI IMPORTS (tests/test_purity.py enforces; also ≤350 lines/file)
+    paths.py        XDG dirs; MONOSPACE_HOME relocates everything
+    config.py       Account/OAuthClients/Settings, PRESETS (gmail/outlook/custom), hand-written TOML dump
+    secrets.py      keyring → EncryptedFileStore (secrets_file.py) fallback; MONOSPACE_SECRETS=keyring|file|memory
+    platform.py     has_display / opener / download dir
+    auth/           xoauth2 · gmail (loopback + headless paste flow) · outlook (MSAL device code) · tokens (resolve())
+    accounts.py     sign-in + IMAP verify shared by CLI and TUI wizards
+    imap.py         ImapSession over imapclient (sync; run in threads), UID-based
+    smtp.py         aiosmtplib send (password / XOAUTH2)
+    store.py        SQLite: folders, messages, bodies, FTS5 `search`, outbox
+    sync.py         incremental per-folder sync (UIDVALIDITY, last UID, flag refresh, body prefetch)
+    watch.py        per-account IDLE/poll threads → callback
+    mime.py/compose.py  parse → ParsedMessage; Draft → EmailMessage (markdown → plain+html), reply/forward
+    policy.py       ai_send: draft | confirm(queue) | allow — applies to source="ai" only
+    service.py      THE façade (blocking). TUI, CLI and MCP all go through it.
+  render/       html_blocks (selectolax lexbor → Text/Image blocks) · images (cid/data/remote opt-in) · gif
+  ui/           app.py (MonospaceApp; imports image_view FIRST — textual_image probes the terminal at import)
+                screens/ main · compose · account_add · outbox     widgets/ folder_tree · message_list · reader
+                · image_view (GIF animation via set_timer) · attachment_bar     glyphs.py (ASCII fallback)
+```
+
+## Rules that matter
+
+- **AI safety:** sends from MCP / non-interactive CLI use `source="ai"` → `policy.decide`. Never add an MCP
+  tool that approves the outbox or changes `ai_send`; CLI `outbox approve` and `account set ai_send=` refuse
+  non-interactive callers. Human TUI sends call `send_now` directly.
+- Message `id` = SQLite rowid (stable handle for CLI/MCP); IMAP UIDs stay internal.
+- Workers: anything touching the network runs in `@work(thread=True)`; update UI via `call_from_thread`.
+- Don't name Textual subclass members after framework internals (`refresh_row`, `_composed` both bit us).
+- Tests use `tests/fakes.py` FakeServer/FakeSession + `MONOSPACE_SECRETS` memory store (conftest autouse).
+- Headless smoke test: ubuntu:24.04 container, `MONOSPACE_PASSPHRASE`, `TERM=linux` under `script`.
