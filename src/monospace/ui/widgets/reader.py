@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from rich.markup import escape
+from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Markdown, Static
 
@@ -26,6 +27,7 @@ def header_markup(pm: ParsedMessage) -> str:
 
 class Reader(VerticalScroll):
     can_focus = True
+    DEFAULT_NOTE = "Select a message — j/k to move, Enter or click to open."
 
     def __init__(self) -> None:
         super().__init__(id="reader")
@@ -34,14 +36,12 @@ class Reader(VerticalScroll):
         self.allow_remote = False
         self.images_enabled = True
         self.show_html = True
+        self._empty_note = self.DEFAULT_NOTE
 
-    def on_mount(self) -> None:
-        self.clear_message()
-
-    def clear_message(self, note: str = "Select a message — j/k to move, Enter or click to open.") -> None:
+    def clear_message(self, note: str = DEFAULT_NOTE) -> None:
         self.envelope = self.parsed = None
-        self.remove_children()
-        self.mount(Static(note, id="empty"))
+        self._empty_note = note
+        self.refresh(recompose=True)
 
     def show(self, env: Envelope, pm: ParsedMessage, *, allow_remote: bool | None = None) -> None:
         same = self.envelope is not None and self.envelope.id == env.id
@@ -50,24 +50,30 @@ class Reader(VerticalScroll):
         elif not same:
             self.allow_remote = self.app.remote_images_default  # type: ignore[attr-defined]
         self.envelope, self.parsed = env, pm
-        self.remove_children()
+        # Recomposition waits for old children to unmount before reusing their IDs.
+        self.refresh(recompose=True)
+        self.scroll_home(animate=False)
+
+    def compose(self) -> ComposeResult:
+        pm = self.parsed
+        if pm is None:
+            yield Static(self._empty_note, id="empty")
+            return
         blocks = to_blocks(pm.html) if (pm.html and self.show_html) else text_to_blocks(pm.best_text())
-        widgets: list = [Static(header_markup(pm), id="headers")]
+        yield Static(header_markup(pm), id="headers")
         blocked = sum(1 for b in blocks if isinstance(b, ImageBlock) and b.is_remote) if not self.allow_remote else 0
         if blocked and self.images_enabled:
-            widgets.append(Static(f"{blocked} remote image(s) blocked to protect your privacy — press "
-                                  "[b]i[/b] to load them.", classes="note"))
+            yield Static(f"{blocked} remote image(s) blocked to protect your privacy — press "
+                         "[b]i[/b] to load them.", classes="note")
         for b in blocks:
             if isinstance(b, TextBlock):
-                widgets.append(Markdown(b.markdown, open_links=False))
+                yield Markdown(b.markdown, open_links=False)
             else:
-                widgets.append(ImageView(b, pm, allow_remote=self.allow_remote, enabled=self.images_enabled))
+                yield ImageView(b, pm, allow_remote=self.allow_remote, enabled=self.images_enabled)
         if not blocks:
-            widgets.append(Static("(empty message)", classes="note"))
+            yield Static("(empty message)", classes="note")
         if pm.attachments:
-            widgets.append(AttachmentBar(pm.attachments))
-        self.mount_all(widgets)
-        self.scroll_home(animate=False)
+            yield AttachmentBar(pm.attachments)
 
     def toggle_remote(self) -> None:
         if self.envelope and self.parsed:
