@@ -1,7 +1,6 @@
 import asyncio
 
 import pytest
-from aiosmtpd.controller import Controller
 
 from monospace.core import smtp
 from monospace.core.auth import gmail, xoauth2
@@ -18,25 +17,21 @@ class Sink:
         return "250 OK"
 
 
-@pytest.fixture
-def smtp_server():
+async def test_send_over_real_smtp():
+    # Server on the test's own loop — no thread/readiness probe (flaky on macOS CI runners).
+    from aiosmtpd.smtp import SMTP
+
     sink = Sink()
-    import socket
-
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
-    ctl = Controller(sink, hostname="127.0.0.1", port=port, ready_timeout=30)
-    ctl.start()
-    yield ctl, sink
-    ctl.stop()
-
-
-def test_send_over_real_smtp(smtp_server):
-    ctl, sink = smtp_server
-    acct = Account(name="t", email="me@example.com", smtp_host="127.0.0.1", smtp_port=ctl.port, smtp_tls="none")
-    msg = build(Draft(to=["you@example.com"], bcc=["b@example.com"], subject="hi", body="yo"), acct.from_header)
-    asyncio.run(smtp.send(acct, None, msg, ["you@example.com", "b@example.com"]))
+    loop = asyncio.get_running_loop()
+    server = await loop.create_server(lambda: SMTP(sink), "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        acct = Account(name="t", email="me@example.com", smtp_host="127.0.0.1", smtp_port=port, smtp_tls="none")
+        msg = build(Draft(to=["you@example.com"], bcc=["b@example.com"], subject="hi", body="yo"), acct.from_header)
+        await smtp.send(acct, None, msg, ["you@example.com", "b@example.com"])
+    finally:
+        server.close()
+        await server.wait_closed()
     env = sink.messages[0]
     assert env.rcpt_tos == ["you@example.com", "b@example.com"] and b"Subject: hi" in env.content
     assert b"b@example.com" not in env.content.split(b"\r\n\r\n")[0]
