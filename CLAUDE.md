@@ -12,7 +12,13 @@ uv run monospace              # TUI (default command)
 uv run monospace doctor --offline
 uv run pytest                 # 35+ tests: core, SMTP (aiosmtpd), MCP (in-process Client), Textual pilot
 uv tool install --editable .  # `monospace` on PATH
+sh install.sh                 # end-user installer (curl | sh); MONOSPACE_SOURCE=<path> to test locally
 ```
+
+`install.sh` (POSIX sh, macOS + Linux): bootstraps uv if missing, then `uv tool install` from the GitHub
+source tarball (no git needed). Test it in ubuntu:24.04 and in a temp HOME on macOS
+(`UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` overrides) before changing it. README screenshots in `docs/assets/` are
+Textual SVG screenshots of a FakeServer demo mailbox.
 
 ## Architecture
 
@@ -47,6 +53,9 @@ src/monospace/
 - **AI safety:** sends from MCP / non-interactive CLI use `source="ai"` → `policy.decide`. Never add an MCP
   tool that approves the outbox or changes `ai_send`; CLI `outbox approve` and `account set ai_send=` refuse
   non-interactive callers. Human TUI sends call `send_now` directly.
+- Agent attachments: `policy.check_agent_attachments` confines `source="ai"` attachments to
+  `agent_attachment_dir` (resolve + is_relative_to, symlinks rejected); queued outbox items snapshot files into
+  `data/outbox-files/`. UI only auto-opens passive types (`platform.safe_to_open`) and http(s) links (`safe_url`).
 - Message `id` = SQLite rowid (stable handle for CLI/MCP); IMAP UIDs stay internal.
 - Workers: anything touching the network runs in `@work(thread=True)`; update UI via `call_from_thread`.
 - Don't name Textual subclass members after framework internals (`refresh_row`, `_composed` both bit us).

@@ -192,8 +192,26 @@ class Service:
             msg["Bcc"] = ", ".join(draft.bcc)
         return msg
 
-    def save_draft(self, account: str | None, draft: Draft) -> SendResult:
+    def _guard_ai(self, draft: Draft) -> None:
+        if draft.attachments:
+            allowed = policy.agent_attachment_dir(self.cfg.settings.agent_attachment_dir)
+            draft.attachments = policy.check_agent_attachments(draft.attachments, allowed)
+
+    def _snapshot(self, draft: Draft) -> None:
+        """Copy queued attachments so the approved message is exactly what was reviewed."""
+        if not draft.attachments:
+            return
+        import shutil
+        import uuid
+
+        target = paths.data_dir() / "outbox-files" / uuid.uuid4().hex
+        target.mkdir(parents=True)
+        draft.attachments = [str(shutil.copy2(src, target / Path(src).name)) for src in draft.attachments]
+
+    def save_draft(self, account: str | None, draft: Draft, source: policy.Source = "human") -> SendResult:
         acct = self.account(account)
+        if source == "ai":
+            self._guard_ai(draft)
         msg = self._build(acct, draft, for_draft=True)
         folder = acct.folder("drafts")
         with self.session(acct) as sess:
@@ -219,13 +237,16 @@ class Service:
         acct = self.account(account)
         if not draft.recipients():
             raise ServiceError("no recipients")
+        if source == "ai":
+            self._guard_ai(draft)
         action = policy.decide(acct.ai_send, source)
         if action == "send":
             return self.send_now(acct.name, draft)
         if action == "draft":
-            res = self.save_draft(acct.name, draft)
+            res = self.save_draft(acct.name, draft)  # already guarded above
             res.detail += f" (account policy ai_send=draft; a human must send it)"
             return res
+        self._snapshot(draft)
         item = self.store.outbox_add(acct.name, draft.to_dict(), source)
         return SendResult("queued", acct.name,
                           f"awaiting approval: `monospace outbox approve {item}` or the TUI outbox (O)", item)
@@ -235,7 +256,7 @@ class Service:
         env, pm = self.read(msg_id)
         acct = self.account(env.account)
         draft = compose.reply(pm, body, acct.email, reply_all=reply_all)
-        return self.submit(acct.name, draft, source) if send else self.save_draft(acct.name, draft)
+        return self.submit(acct.name, draft, source) if send else self.save_draft(acct.name, draft, source)
 
     def forward(self, msg_id: int, body: str, to: list[str], *, source: policy.Source = "human") -> SendResult:
         env, pm = self.read(msg_id)

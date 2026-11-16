@@ -74,6 +74,9 @@ class MonospaceApp(App):
     def open_link(self, href: str) -> None:
         if href.startswith("mailto:"):
             self.open_compose(Draft(to=[href[7:].split("?")[0]]), None)
+        elif not platform.safe_url(href):
+            self.copy_to_clipboard(href)
+            self.notify(f"Not opening a non-web link; copied instead:\n{href[:200]}", severity="warning")
         elif platform.has_display():
             self.open_url(href)
             self.notify(f"Opened {href[:80]}", timeout=3)
@@ -115,8 +118,10 @@ class MonospaceApp(App):
         except Exception as exc:
             self.call_from_thread(self.notify, f"Could not save: {exc}", severity="error")
             return
-        opened = platform.open_path(str(path))
-        self.call_from_thread(self.notify, f"Saved {path}" + (" and opened it" if opened else ""), timeout=8)
+        opened = platform.safe_to_open(str(path)) and platform.open_path(str(path))
+        note = " and opened it" if opened else ("" if platform.safe_to_open(str(path)) else
+                                                 " (not opened automatically: not a passive file type)")
+        self.call_from_thread(self.notify, f"Saved {path}{note}", timeout=8)
 
     def open_outbox(self) -> None:
         self.push_screen(OutboxScreen())

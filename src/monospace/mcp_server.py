@@ -45,8 +45,14 @@ def build_server(get_service: Callable[[], Service]) -> MCPServer:
 
     @server.tool(annotations=READ)
     async def list_accounts() -> list[dict]:
-        """List configured mail accounts and their AI send policy."""
-        return await run(lambda s: s.accounts())
+        """List configured mail accounts, their AI send policy, and the only folder you may attach from."""
+        def go(s: Service) -> list[dict]:
+            from monospace.core.policy import agent_attachment_dir
+
+            folder = str(agent_attachment_dir(s.cfg.settings.agent_attachment_dir))
+            return [{**a, "attachment_dir": folder} for a in s.accounts()]
+
+        return await run(go)
 
     @server.tool(annotations=WRITE)
     async def sync(account: str | None = None, folder: str = "INBOX") -> dict:
@@ -95,7 +101,8 @@ def build_server(get_service: Callable[[], Service]) -> MCPServer:
                          bcc: list[str] | None = None, attachments: list[str] | None = None,
                          account: str | None = None) -> dict:
         """Send a new message (markdown body). Subject to the account's ai_send policy — the result
-        `status` is 'sent', 'drafted' or 'queued'; tell the user which."""
+        `status` is 'sent', 'drafted' or 'queued'; tell the user which. `attachments` must be files
+        inside the user's agent-attachments folder (see list_accounts → attachment_dir)."""
         draft = _draft(to, subject, body, cc, bcc, attachments)
         return (await run(lambda s: s.submit(account, draft, "ai"))).to_dict()
 
@@ -105,7 +112,7 @@ def build_server(get_service: Callable[[], Service]) -> MCPServer:
                            account: str | None = None) -> dict:
         """Save a message to the account's Drafts folder without sending it."""
         draft = _draft(to, subject, body, cc, bcc, attachments)
-        return (await run(lambda s: s.save_draft(account, draft))).to_dict()
+        return (await run(lambda s: s.save_draft(account, draft, "ai"))).to_dict()
 
     @server.tool(annotations=WRITE)
     async def reply(id: int, body: str, reply_all: bool = False, send: bool = True) -> dict:

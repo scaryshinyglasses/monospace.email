@@ -89,6 +89,7 @@ class Settings:
     images: bool = True
     remote_images: bool = False
     download_dir: str = ""
+    agent_attachment_dir: str = ""  # the only folder AI agents may attach files from
     theme: str = "monospace"
 
 

@@ -1,195 +1,254 @@
-# monospace.email
+<div align="center">
 
-**Email in your terminal, with real images, animated GIFs, a mouse, and an AI interface.**
+# `monospace`<sub>.email</sub>
 
-`monospace` is an IMAP/SMTP mail client for the terminal. You can add Gmail and Outlook with
-one sign-in, or any other provider with IMAP/SMTP. HTML mail renders inline, including
-pictures and GIFs. It works with a mouse or the keyboard. It also includes a CLI and an
-[MCP](https://modelcontextprotocol.io) server, so AI assistants such as Claude can read,
-search, draft and send mail under rules you set.
+**Email in your terminal, with real images, animated GIFs, a mouse, and an AI you can trust with it.**
 
-It runs the same way on a macOS desktop, an Ubuntu server over SSH, or a bare Linux console.
+[![CI](https://github.com/scaryshinyglasses/monospace.email/actions/workflows/ci.yml/badge.svg)](https://github.com/scaryshinyglasses/monospace.email/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
+![macOS](https://img.shields.io/badge/macOS-supported-000?logo=apple&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-supported-FCC624?logo=linux&logoColor=black)
+![MCP](https://img.shields.io/badge/MCP-server-8A2BE2)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-```
-┌ personal me@example.com ─┬─────────────────────────────────────────────────────────┐
-│ 📥 Inbox   3             │ ● News         Animated             2026-11-18 10:00    │
-│ 📝 Drafts                │ 📎 Ana         Invoice #2041        2026-11-17 10:00    │
-│ 📤 Sent                  │ ● Ana          Welcome to monospace 2026-11-16 10:00    │
-│ 📦 Archive               ├─────────────────────────────────────────────────────────┤
-│ 🧺 Trash                 │ Animated                                                │
-│                          │ From  News <news@example.com>                           │
-│                          │ ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄    │
-│                          │ Hi — look here      [ your GIF, animating, in pixels ]  │
-└──────────────────────────┴─────────────────────────────────────────────────────────┘
- c Compose  r Reply  a Archive  d Delete  / Search  i Images  ^r Sync  O Outbox  q Quit
+```sh
+curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | sh
 ```
 
-## Features
+<img src="docs/assets/screenshot-reader.svg" alt="monospace reading a newsletter: folder tree, message list and rendered HTML" width="100%">
 
-- **Any provider:**
-  - Gmail and Outlook / Microsoft 365 presets, using OAuth or an app password.
-  - Any other server with IMAP + SMTP (SSL, STARTTLS or plain).
-  - Several accounts at once.
-- **Images in the terminal:**
-  - The terminal's graphics protocol is detected automatically: Kitty/Ghostty (Kitty graphics), or Sixel (iTerm2, WezTerm, foot, Konsole, xterm -ti vt340…).
-  - Other terminals fall back to coloured half-blocks, which works everywhere.
-  - Animated GIFs play.
-  - Remote images are **blocked by default**, which stops tracking pixels. Press `i` to load them.
-- **Clickable:**
-  - Folders, messages, links, attachments and buttons respond to the mouse.
-  - Every action also has a key binding (the bare Linux console has no mouse).
-- **Fast and works offline:**
-  - A local SQLite cache with full-text search (FTS5).
-  - New mail arrives over IMAP IDLE push, with polling as a fallback.
-- **Built for AI:**
-  - MCP server: `monospace mcp`.
-  - Every CLI command takes `--json`.
-  - A per-account **AI send policy** controls what an agent can send (`draft` / `confirm` / `allow`).
-- **Headless first:**
-  - Gmail OAuth works without a browser (paste-URL flow); Outlook uses the device-code flow.
-  - Secrets go to an encrypted file when there's no OS keyring.
-  - Links copy to the clipboard over SSH (OSC 52).
-  - `monospace daemon --install` sets up a systemd/launchd sync service.
+</div>
+
+---
+
+## Why monospace?
+
+You probably keep a terminal open all day, and email is often the reason to leave it.
+monospace aims to give you a mail client fast enough that you stop reaching for the browser:
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 📬 Every inbox
+Gmail and Outlook / Microsoft 365 sign-in, plus **any** IMAP + SMTP server.
+Several accounts appear in one tree.
+
+### 🖼 Pictures, not placeholders
+HTML mail renders as formatted text with **inline images and animated GIFs**:
+- Kitty graphics and Sixel are detected automatically (Ghostty, Kitty, WezTerm, iTerm2, foot, Konsole…).
+- Other terminals get coloured half-blocks.
+- Remote images are **blocked by default**, which stops tracking pixels. Press `i` to load them.
+
+### 🖱 Clickable *and* keyboard-first
+Click folders, messages, links and attachments, or never touch the mouse:
+vim keys, `/` search and one-key actions.
+
+</td>
+<td width="50%" valign="top">
+
+### 🤖 AI-native, with guardrails
+A built-in **MCP server** and a `--json` CLI let Claude (or any agent) triage,
+search, draft and reply. You choose per account what an agent may do:
+
+| `ai_send` | agent sends become… |
+|---|---|
+| `draft` *(default)* | a draft in your Drafts folder |
+| `confirm` | a queued message you approve |
+| `allow` | a sent email |
+
+### 🖥 Headless first
+It runs over SSH and on a bare Linux console:
+- Gmail sign-in works without a browser.
+- Secrets go to an encrypted file when there's no keyring.
+- Copied links use OSC 52, so the clipboard works over SSH.
+- ASCII icons are used on `TERM=linux`.
+- `daemon --install` sets up systemd or launchd background sync.
+
+### ⚡ Fast and offline
+A local SQLite cache with full-text search, and new mail pushed over IMAP IDLE.
+
+</td>
+</tr>
+</table>
 
 ## Install
 
-Requires Python 3.11+.
+The one-liner works on **macOS and Linux** (x86_64 and arm64), including minimal servers with no
+Python or git installed:
 
-```bash
+```sh
+curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | sh
+```
+
+It installs [uv](https://docs.astral.sh/uv/) if you don't have it. uv then fetches its own Python, and
+`monospace` lands in `~/.local/bin`.
+
+<details>
+<summary><b>Other ways to install, upgrade and uninstall</b></summary>
+
+```sh
+# with uv or pipx directly
 uv tool install git+https://github.com/scaryshinyglasses/monospace.email
-# or
 pipx install git+https://github.com/scaryshinyglasses/monospace.email
+
+# a specific version
+curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | MONOSPACE_REF=v0.1.0 sh
+
+# upgrade = run the installer again;  uninstall (your config and mail cache are kept):
+curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | sh -s -- --uninstall
+```
+</details>
+
+## Quick start
+
+```sh
+monospace            # opens the client — the first run walks you through adding an account
+monospace doctor     # checks keyring, terminal graphics and connectivity
 ```
 
-Then run:
+<div align="center">
+<img src="docs/assets/screenshot-compose.svg" alt="Composing a reply in Markdown" width="90%">
+<br><sub>Compose in Markdown. It's sent as clean plain text plus HTML.</sub>
+</div>
 
-```bash
-monospace            # opens the TUI; first run walks you through adding an account
-monospace doctor     # checks secrets backend, terminal graphics, connectivity
+### Keys
+
+| | | | |
+|---|---|---|---|
+| `j` `k` / ↑ ↓ | move | `Enter` / click | open |
+| `c` | compose | `r` · `R` · `f` | reply · reply-all · forward |
+| `a` | archive | `d` · `Del` · `#` | delete |
+| `u` | toggle unread | `*` | toggle flag |
+| `/` | search all mail | `Esc` | back |
+| `i` | load remote images | `H` | HTML ↔ plain text |
+| `Ctrl+R` · `g` | sync now | `O` | AI outbox |
+| `A` | add account | `q` | quit |
+
+In compose, `Ctrl+S` sends and `Ctrl+D` saves a draft.
+
+## Let your AI read your mail, safely
+
+```sh
+claude mcp add monospace -- monospace mcp
 ```
 
-## Adding accounts
+Then ask: *"Summarise my unread mail and draft replies to anything from Priya."*
 
-| Provider | Without setup | With OAuth configured |
+```
+ you ──▶ Claude ──MCP──▶ monospace ──IMAP/SMTP──▶ your provider
+                             │
+                             └─ ai_send policy:  draft │ confirm ─▶ outbox (you approve, O / y) │ allow
+```
+
+**Tools:** `list_accounts` `sync` `list_folders` `list_messages` `search` `read_message`
+`save_attachment` `send_email` `create_draft` `reply` `forward` `mark` `move` `outbox_list`
+
+**Guardrails built into the code, not into a prompt:**
+- There's **no** tool to approve the outbox or change the policy. Those commands refuse to run without an interactive terminal.
+- Agents can only attach files from one folder you control (shown by `list_accounts`). Paths outside it are rejected, including `~/.ssh/...` and escapes through symlinks.
+- Attachments on queued messages are snapshotted, so the file you approve is the file that gets sent.
+- Email bodies are handed to the model **marked as untrusted content**, which is a defence against prompt injection.
+
+The CLI works the same way for scripts and agents:
+
+```sh
+monospace ls --unread --json
+monospace read 42 --json
+monospace search "invoice march"
+echo "Sounds good — see you then." | monospace reply 42
+monospace send --to bob@example.com --subject Hi --body "**Hello**" --attach ~/notes.pdf
+monospace outbox list            # then: monospace outbox approve 7   (humans only)
+```
+
+## Accounts
+
+| Provider | Out of the box | With your own OAuth app |
 |---|---|---|
-| Gmail | app password (needs 2-Step Verification) | Sign in with Google |
-| Outlook / M365 | app password, where your tenant allows it | Microsoft device-code sign-in |
-| Anything else | IMAP/SMTP host + password | — |
+| **Gmail** | app password (needs 2-Step Verification) | Sign in with Google: browser, or paste-URL when headless |
+| **Outlook / M365** | app password, where your tenant allows it | Microsoft device code: works anywhere |
+| **Anything else** | IMAP + SMTP host, SSL / STARTTLS | — |
 
-Add accounts from the TUI (`A`) or the command line:
-
-```bash
-monospace account add                       # interactive
-monospace account add --provider gmail --email you@gmail.com --no-browser   # headless
-monospace account list
-monospace account set work ai_send=confirm  # see "AI policy" below
+```sh
+monospace account add                                   # interactive (or press A in the app)
+monospace account add --provider gmail --no-browser     # on a server
+monospace account set work ai_send=confirm
 ```
 
-### Gmail OAuth (optional)
-
-To use OAuth for Gmail, register your own client:
+<details>
+<summary><b>Set up Gmail OAuth (about 5 minutes)</b></summary>
 
 1. In [Google Cloud Console](https://console.cloud.google.com/) create a project. Configure the **OAuth consent screen** (External), and add yourself as a test user.
 2. Go to **Credentials → Create credentials → OAuth client ID → Desktop app**.
 3. Run `monospace oauth --google-client-id <id> --google-client-secret <secret>`. A Desktop-app secret isn't confidential.
 
-Apps in "Testing" status issue refresh tokens that expire after 7 days. Publish the app, or run `monospace account login <name>` again when the token expires.
+**Headless:** `monospace account add --no-browser` prints a link. Approve access on your phone or laptop, then paste back
+the `http://localhost…` address the browser lands on. The page fails to load, and that's expected. Alternatively,
+`ssh -L 8765:localhost:8765 server` together with `--listen` lets the loopback flow complete on its own.
 
-**Headless:** `monospace account add --no-browser` prints a URL. Approve access on any device, then paste the `http://localhost…` address the browser lands on. The page fails to load, and that's expected. Alternatively, `ssh -L 8765:localhost:8765 server` together with `--listen` lets the loopback flow complete on its own.
+> Apps in *Testing* status issue refresh tokens that expire after 7 days. Publish the app, or run `monospace account login <name>` again when the token expires.
+</details>
 
-### Outlook / Microsoft 365 OAuth (optional)
+<details>
+<summary><b>Set up Outlook / Microsoft 365 OAuth</b></summary>
 
-1. In Entra ID, go to **App registrations → New registration**. Under supported account types choose *Accounts in any organizational directory and personal Microsoft accounts*.
+1. In Entra ID, go to **App registrations → New registration**. Under supported account types choose *any organizational directory and personal Microsoft accounts*.
 2. Under **Authentication**, set *Allow public client flows* to **Yes**.
 3. Under **API permissions**, add *Office 365 Exchange Online* → delegated `IMAP.AccessAsUser.All` and `SMTP.Send`.
 4. Run `monospace oauth --microsoft-client-id <id>`. Add `--microsoft-tenant <tenant-id>` to restrict sign-in to one tenant.
 
-The device-code flow shows a code and a URL, so it works on any machine, headless included. Some tenants need an admin to enable SMTP AUTH for the mailbox.
+Some tenants need an admin to enable SMTP AUTH for the mailbox.
+</details>
 
-## Using it
+## Runs anywhere
 
-| Key | Action | Key | Action |
-|---|---|---|---|
-| `j` / `k`, arrows | move | `Enter` / click | open |
-| `c` | compose | `r` / `R` / `f` | reply / reply-all / forward |
-| `a` | archive | `d` / `Del` / `#` | delete (to Trash) |
-| `u` | toggle unread | `*` | toggle flag |
-| `/` | search all mail | `Esc` | back to folder |
-| `i` | load remote images | `H` | HTML ↔ plain text |
-| `Ctrl+R` / `g` | sync now | `O` | AI outbox |
-| `A` | add account | `q` | quit |
+| | macOS | Linux desktop | Linux over SSH | Bare console (`TERM=linux`) |
+|---|---|---|---|---|
+| Images & GIFs | ✅ pixels | ✅ pixels | ✅ pixels, if your local terminal supports them | ✅ half-blocks |
+| Mouse | ✅ | ✅ | ✅ | keyboard only |
+| Secrets | Keychain | Secret Service | encrypted file | encrypted file |
+| Gmail sign-in | browser | browser | paste-URL / `ssh -L` | paste-URL |
+| Links | open in browser | open in browser | copied (OSC 52) | copied |
+| Background sync | launchd | systemd `--user` | systemd `--user` | systemd `--user` |
 
-Compose bodies are Markdown, sent as plain text plus an HTML alternative. Use `Ctrl+S` to send and `Ctrl+D` to save a draft.
+On machines without a keyring, secrets live in `~/.local/share/monospace/secrets.enc` (Fernet + scrypt, mode `0600`),
+unlocked by `MONOSPACE_PASSPHRASE` or a prompt.
 
-### CLI
-
-```bash
-monospace sync                         # fetch new mail (INBOX; --all for every folder)
-monospace ls --unread --json           # list
-monospace read 42                      # print a message (--json, --raw)
-monospace search "invoice march"
-monospace send --to bob@example.com --subject Hi --body "**Hello**" --attach ~/file.pdf
-echo "body" | monospace reply 42 --all
-monospace mark 42 --read --flag
-monospace move 42 archive
-monospace attachment 42 0              # save attachment #0 to ~/Downloads
-monospace outbox list | approve 7 | reject 7
-monospace daemon --install             # background sync via systemd --user / launchd
-```
-
-## AI integration
-
-### MCP server
-
-```bash
-claude mcp add monospace -- monospace mcp
-# headless box without a keyring:
-claude mcp add monospace -e MONOSPACE_PASSPHRASE=… -- monospace mcp
-```
-
-Tools: `list_accounts`, `sync`, `list_folders`, `list_messages`, `search`, `read_message`,
-`save_attachment`, `send_email`, `create_draft`, `reply`, `forward`, `mark`, `move`, `outbox_list`.
-
-### AI policy
-
-Each account has an `ai_send` setting that decides what happens when an **agent** sends. An agent means an MCP call, or the CLI run without an interactive terminal (or with `MONOSPACE_AGENT=1`).
-
-| `ai_send` | What happens |
-|---|---|
-| `draft` (default) | The message is saved to the account's Drafts folder; you send it yourself. |
-| `confirm` | The message is queued in the local outbox. Approve it in the TUI (`O`, then `y`) or with `monospace outbox approve <id>`. |
-| `allow` | The message is sent immediately. |
-
-There's deliberately no MCP tool for approving the outbox or changing the policy. `outbox approve` and `account set … ai_send=…` only work from an interactive terminal. Email bodies go to the model marked as untrusted content.
-
-## Headless / servers
-
-- **Secrets:** stored in the OS keyring when one is available. Otherwise they go to an encrypted file, `~/.local/share/monospace/secrets.enc` (Fernet + scrypt, mode 0600), unlocked by `MONOSPACE_PASSPHRASE` or a prompt. Set `MONOSPACE_SECRETS=keyring|file` to choose.
-- **Images over SSH:** if your local terminal speaks Kitty graphics or Sixel, images come through SSH at full resolution. The bare console (`TERM=linux`) gets half-block images and ASCII icons; `MONOSPACE_ASCII=1` forces ASCII icons anywhere. Use `monospace --no-images` or `[settings] images = false` to turn images off.
-- **Links and attachments:** when there's no display, clicking a link copies it to the clipboard (OSC 52), and attachments are saved to `~/Downloads`, or `~/monospace-downloads` if that folder doesn't exist.
-
-## Files
+<details>
+<summary><b>Files and environment variables</b></summary>
 
 | Path | What |
 |---|---|
-| `~/.config/monospace/config.toml` | accounts, OAuth client IDs, settings (never secrets) |
+| `~/.config/monospace/config.toml` | accounts, OAuth client IDs, settings: never secrets |
 | `~/.local/share/monospace/cache.db` | message cache + search index |
+| `~/.local/share/monospace/agent-attachments/` | the only folder agents may attach files from |
 | `~/.local/share/monospace/secrets.enc` | encrypted secrets, only used when there's no keyring |
 
-`MONOSPACE_HOME=/some/dir` moves all three.
+| Variable | Effect |
+|---|---|
+| `MONOSPACE_HOME` | move all of the above under one directory |
+| `MONOSPACE_PASSPHRASE` | unlock the encrypted secrets file non-interactively |
+| `MONOSPACE_SECRETS` | `keyring` / `file`: force a secrets backend |
+| `MONOSPACE_AGENT=1` | treat this CLI call as an agent (applies the `ai_send` policy) |
+| `MONOSPACE_ASCII=1` | ASCII icons instead of emoji |
+
+Settings (`[settings]` in config.toml): `images`, `remote_images`, `download_dir`, `agent_attachment_dir`.
+</details>
 
 ## Development
 
-```bash
+```sh
 git clone https://github.com/scaryshinyglasses/monospace.email && cd monospace.email
 uv sync
-uv run pytest            # unit, SMTP (aiosmtpd), MCP and Textual pilot tests
+uv run pytest              # core, SMTP, MCP and Textual UI tests
 uv run monospace
-uv tool install --editable .   # `monospace` on PATH, tracking your checkout
 ```
 
-See [CLAUDE.md](CLAUDE.md) for the architecture map.
+Built with [Textual](https://textual.textualize.io), [textual-image](https://github.com/lnqs/textual-image),
+[IMAPClient](https://github.com/mjs/imapclient), [aiosmtplib](https://github.com/cole/aiosmtplib) and the
+[MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk). See [CLAUDE.md](CLAUDE.md) for the
+architecture map. Issues and PRs are welcome.
 
-## License
-
-MIT © Tanmay Sheoran
+<div align="center">
+<sub>MIT © Tanmay Sheoran · made for people who live in the terminal</sub>
+</div>

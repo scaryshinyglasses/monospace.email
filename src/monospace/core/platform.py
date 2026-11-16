@@ -35,6 +35,26 @@ def open_path(target: str) -> bool:
         return False
 
 
+PASSIVE_TYPES = ("image/", "application/pdf", "text/plain", "audio/", "video/")
+
+
+def safe_to_open(path: str) -> bool:
+    """Only auto-open passive content; executables, scripts, archives and Office docs are just saved."""
+    import mimetypes
+
+    ctype, _ = mimetypes.guess_type(path)
+    return bool(ctype) and ctype.startswith(PASSIVE_TYPES)  # type: ignore[union-attr]
+
+
+SAFE_SCHEMES = ("http", "https")
+
+
+def safe_url(href: str) -> bool:
+    from urllib.parse import urlparse
+
+    return urlparse(href).scheme.lower() in SAFE_SCHEMES
+
+
 def download_dir(configured: str = "") -> Path:
     if configured:
         path = Path(configured).expanduser()

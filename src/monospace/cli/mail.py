@@ -103,10 +103,10 @@ def _print_message(svc: Service, msg_id: int, args: argparse.Namespace) -> None:
 
 
 def _submit(svc: Service, args: argparse.Namespace, draft: Draft, *, as_draft: bool) -> None:
+    human = interactive()
     if as_draft:
-        res = svc.save_draft(args.account, draft)
+        res = svc.save_draft(args.account, draft, "human" if human else "ai")
     else:
-        human = interactive()
         if human and not args.yes:
             info(f"To: {', '.join(draft.to)}  Subject: {draft.subject}")
             if not confirm("Send now?"):

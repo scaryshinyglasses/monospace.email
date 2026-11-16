@@ -26,7 +26,7 @@ def smtp_server():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    ctl = Controller(sink, hostname="127.0.0.1", port=port)
+    ctl = Controller(sink, hostname="127.0.0.1", port=port, ready_timeout=30)
     ctl.start()
     yield ctl, sink
     ctl.stop()
