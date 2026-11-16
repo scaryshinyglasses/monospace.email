@@ -35,15 +35,38 @@ def open_path(target: str) -> bool:
         return False
 
 
-PASSIVE_TYPES = ("image/", "application/pdf", "text/plain", "audio/", "video/")
+# Exact types only (no prefixes: image/svg+xml can carry script). Content must match the extension.
+_MAGIC: dict[str, tuple[bytes, ...]] = {
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/gif": (b"GIF87a", b"GIF89a"),
+    "image/webp": (b"RIFF",),
+    "application/pdf": (b"%PDF-",),
+    "text/plain": (),  # checked separately: must decode as UTF-8 text
+}
 
 
 def safe_to_open(path: str) -> bool:
-    """Only auto-open passive content; executables, scripts, archives and Office docs are just saved."""
+    """Only auto-open passive files whose bytes match their extension; everything else is just saved."""
     import mimetypes
 
     ctype, _ = mimetypes.guess_type(path)
-    return bool(ctype) and ctype.startswith(PASSIVE_TYPES)  # type: ignore[union-attr]
+    if ctype not in _MAGIC:
+        return False
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(4096)
+    except OSError:
+        return False
+    if ctype == "text/plain":
+        try:
+            head.decode("utf-8")
+        except UnicodeDecodeError:
+            return False
+        return b"\x00" not in head
+    if ctype == "image/webp" and head[8:12] != b"WEBP":
+        return False
+    return any(head.startswith(sig) for sig in _MAGIC[ctype])
 
 
 SAFE_SCHEMES = ("http", "https")

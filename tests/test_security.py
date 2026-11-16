@@ -42,9 +42,28 @@ def test_humans_can_attach_anything(svc, sent, tmp_path):
     assert len(sent) == 1
 
 
-def test_safe_open_and_urls():
-    assert platform.safe_to_open("a.pdf") and platform.safe_to_open("pic.PNG")
-    assert not platform.safe_to_open("run.sh") and not platform.safe_to_open("x.app")
-    assert not platform.safe_to_open("invoice.docm") and not platform.safe_to_open("noext")
+def test_safe_open_and_urls(tmp_path):
+    def f(name, data):
+        p = tmp_path / name
+        p.write_bytes(data)
+        return str(p)
+
+    assert platform.safe_to_open(f("a.pdf", b"%PDF-1.7 ..."))
+    assert platform.safe_to_open(f("pic.PNG", b"\x89PNG\r\n\x1a\n...."))
+    assert platform.safe_to_open(f("notes.txt", "héllo".encode()))
+    assert not platform.safe_to_open(f("fake.pdf", b"#!/bin/sh\nrm -rf ~"))  # extension lies
+    assert not platform.safe_to_open(f("logo.svg", b"<svg onload=alert(1)>"))
+    for name in ("run.sh", "x.app", "invoice.docm", "noext"):
+        assert not platform.safe_to_open(f(name, b"%PDF-"))
     assert platform.safe_url("https://ex.com") and not platform.safe_url("file:///etc/passwd")
     assert not platform.safe_url("javascript:alert(1)") and not platform.safe_url("smb://host/share")
+
+
+def test_approve_refuses_unsnapshotted_ai_item(svc, tmp_path):
+    from monospace.core.service import ServiceError
+
+    secret = tmp_path / "secret.txt"
+    secret.write_text("x")
+    item = svc.store.outbox_add("work", Draft(to=["x@y.com"], attachments=[str(secret)]).to_dict(), "ai")
+    with pytest.raises(ServiceError, match="snapshot"):
+        svc.outbox_approve(item)

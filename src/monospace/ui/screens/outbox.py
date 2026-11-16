@@ -70,9 +70,9 @@ class OutboxScreen(ModalScreen[None]):
         if d.get("attachments"):
             from pathlib import Path
 
-            files = [f"{Path(f).name} ({Path(f).stat().st_size:,} B)" if Path(f).exists() else f"{f} (missing!)"
-                     for f in d["attachments"]]
-            meta.append(f"[dim]Files[/] {escape(', '.join(files))}")
+            files = [f"{Path(f).resolve()} ({Path(f).stat().st_size:,} B)" if Path(f).exists()
+                     else f"{f} (missing!)" for f in d["attachments"]]
+            meta += [f"[dim]File[/] {escape(f)}" for f in files]
         if it.get("error"):
             meta.append(f"[red]last error: {escape(it['error'])}[/]")
         self.query_one("#meta", Static).update("\n".join(meta))

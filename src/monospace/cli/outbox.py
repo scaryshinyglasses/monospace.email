@@ -27,7 +27,11 @@ def _show(item: dict) -> None:
         print(f"Bcc: {', '.join(d['bcc'])}")
     print(f"Subject: {d.get('subject', '')}")
     if d.get("attachments"):
-        print(f"Attachments: {', '.join(d['attachments'])}")
+        from pathlib import Path
+
+        for f in d["attachments"]:
+            p = Path(f).resolve()
+            print(f"Attachment: {p} ({p.stat().st_size:,} bytes)" if p.exists() else f"Attachment: {f} (missing!)")
     print("\n" + d.get("body", ""))
     if item.get("error"):
         print(f"\nlast error: {item['error']}")

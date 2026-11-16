@@ -270,6 +270,11 @@ class Service:
         item = self.store.outbox_get(item_id)
         if not item or item["status"] != "pending":
             raise ServiceError(f"no pending outbox item {item_id}")
+        if item["source"] == "ai":  # only send exactly the snapshotted files that were reviewed
+            snap = (paths.data_dir() / "outbox-files").resolve()
+            for f in item["draft"].get("attachments", []):
+                if not Path(f).resolve().is_relative_to(snap):
+                    raise ServiceError(f"refusing outbox item {item_id}: attachment outside snapshot dir: {f}")
         try:
             res = self.send_now(item["account"], Draft.from_dict(item["draft"]))
         except Exception as exc:
