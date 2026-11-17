@@ -134,11 +134,13 @@ def _print_message(svc: Service, msg_id: int, args: argparse.Namespace) -> None:
                    "inline_images": [{"cid": cid, "filename": p.filename, "content_type": p.content_type,
                                       "size": p.size} for cid, p in pm.inline.items()]})
         return
-    print(f"From:    {pm.from_}\nTo:      {', '.join(pm.to)}")
+    from monospace.core.sanitize import terminal_safe as ts
+
+    print(ts(f"From:    {pm.from_}\nTo:      {', '.join(pm.to)}"))
     if pm.cc:
-        print(f"Cc:      {', '.join(pm.cc)}")
-    print(f"Date:    {pm.date}\nSubject: {pm.subject}\n")
-    print(pm.best_text())
+        print(ts(f"Cc:      {', '.join(pm.cc)}"))
+    print(ts(f"Date:    {pm.date}\nSubject: {pm.subject}\n"))
+    print(ts(pm.best_text()))
     for i, a in enumerate(pm.attachments):
         print(f"\n[{i}] 📎 {a.filename} ({a.content_type}, {a.size:,} bytes)")
     for cid, p in pm.inline.items():

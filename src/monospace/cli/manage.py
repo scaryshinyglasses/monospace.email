@@ -83,6 +83,11 @@ def _result(args: argparse.Namespace, res) -> None:  # type: ignore[no-untyped-d
 
 
 def _show_draft(d: dict) -> None:
+    from monospace.core.sanitize import review_text, terminal_safe
+
+    d = {k: (terminal_safe(v) if isinstance(v, str) and k != "html" else
+             [terminal_safe(x) for x in v] if isinstance(v, list) and v and isinstance(v[0], str) else v)
+         for k, v in d.items()}
     print(f"Draft #{d['id']}  ({d['account']})\nTo:      {', '.join(d['to'])}")
     for label, key in (("Cc", "cc"), ("Bcc", "bcc")):
         if d[key]:
@@ -93,10 +98,8 @@ def _show_draft(d: dict) -> None:
     for i in d["inline_images"]:
         print(f"🖼  inline {i['filename']} ({i['content_type']}, {i['size']:,} bytes, cid {i['cid']})")
     if d["html"] and not d["html_matches_body"]:
-        from monospace.core.mime import html_to_text
-
         print("\n⚠ The HTML part (what most recipients see) differs from the text above. It reads:\n")
-        print(html_to_text(d["html"]))
+        print(review_text(d["html"]))
     elif d["html"]:
         print("\n(has an HTML part — `monospace read --raw` to see it)")
 

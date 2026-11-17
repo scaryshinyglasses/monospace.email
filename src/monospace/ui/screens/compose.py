@@ -16,6 +16,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static, TextArea
 
 from monospace.core import compose as composer
+from monospace.core import sanitize
 from monospace.core.compose import Draft, split_addrs
 
 
@@ -40,12 +41,10 @@ class ComposeScreen(ModalScreen[ComposeResultData | None]):
         self.draft, self.account, self.accounts, self.draft_id = draft, account, accounts, draft_id
         self._cid_by_path = {p: cid for cid, p in draft.inline_images.items()}
         self._html_replaced = False
-        if draft.html_body and composer.html_extra_words(draft.html_body, draft.body):
-            # The stored HTML says things the text part doesn't: show the HTML's text and rebuild the
-            # HTML from what's on screen, so what you review is what gets sent.
-            from monospace.core.mime import html_to_text
-
-            draft.body, draft.html_body, self._html_replaced = html_to_text(draft.html_body), "", True
+        if draft.html_body and not sanitize.html_matches_text(draft.html_body, draft.body):
+            # The stored HTML shows something other than the text part: show the HTML's content
+            # (links spelled out) and rebuild the HTML from what's on screen — review == send.
+            draft.body, draft.html_body, self._html_replaced = sanitize.review_text(draft.html_body), "", True
 
     def compose(self) -> ComposeResult:
         d = self.draft

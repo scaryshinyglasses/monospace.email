@@ -17,8 +17,11 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     osub.add_parser("reject").add_argument("id", type=int)
 
 
-def _show(item: dict) -> None:
-    d = item["draft"]
+def _show(item: dict, svc: Service) -> None:
+    from monospace.core.sanitize import terminal_safe
+
+    d = {k: (terminal_safe(v) if isinstance(v, str) else
+             [terminal_safe(x) for x in v] if isinstance(v, list) else v) for k, v in item["draft"].items()}
     print(f"#{item['id']}  account={item['account']}  queued={item['created']}  source={item['source']}")
     print(f"To: {', '.join(d.get('to', []))}")
     if d.get("cc"):
@@ -32,14 +35,9 @@ def _show(item: dict) -> None:
         for f in d["attachments"]:
             p = Path(f).resolve()
             print(f"Attachment: {p} ({p.stat().st_size:,} bytes)" if p.exists() else f"Attachment: {f} (missing!)")
-    print("\n" + d.get("body", ""))
-    if d.get("html_body"):
-        from monospace.core.mime import html_to_text
-
-        print("\n--- HTML part (what most recipients see), as text ---\n" + html_to_text(d["html_body"]))
-    if d.get("inline_images"):
-        for f in d["inline_images"].values():
-            print(f"Inline image: {f}")
+    for f in (d.get("inline_images") or {}).values():
+        print(f"Inline image: {terminal_safe(str(f))}")
+    print("\n--- what recipients will see ---\n" + svc.outbox_review(item))
     if item.get("error"):
         print(f"\nlast error: {item['error']}")
 
@@ -61,13 +59,13 @@ def run(args: argparse.Namespace, svc: Service) -> int:
         info(f"no outbox item {args.id}")
         return 1
     if cmd == "show":
-        _show(item)
+        _show(item, svc)
         return 0
     # Approving is a human decision: never allow it from an agent / pipe.
     if not interactive():
         info("outbox approve/reject must be run by a human in an interactive terminal")
         return 2
-    _show(item)
+    _show(item, svc)
     if cmd == "approve":
         if not confirm("\nSend this message?"):
             info("not sent")

@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from monospace.core import compose, mime, paths, platform, policy
+from monospace.core import compose, mime, paths, platform, policy, sanitize
 from monospace.core import sync as syncmod
 from monospace.core.compose import Draft
 from monospace.core.config import Account
@@ -87,7 +87,7 @@ class DraftsMixin:
         return {
             "id": env.id, "account": acct.name, "to": pm.to, "cc": pm.cc, "bcc": pm.bcc,
             "subject": pm.subject, "body": _strip_signature(pm.text, acct.signature), "html": pm.html,
-            "html_matches_body": not (pm.html and compose.html_extra_words(pm.html, pm.text)),
+            "html_matches_body": not pm.html or sanitize.html_matches_text(pm.html, pm.text),
             "attachments": [{"filename": p.filename, "content_type": p.content_type, "size": p.size}
                             for p in pm.attachments],
             "inline_images": [{"cid": cid, "filename": p.filename, "content_type": p.content_type,
@@ -141,7 +141,7 @@ class DraftsMixin:
                 raise ServiceError(f"draft {msg_id}: {exc}; remove it first (remove_inline_images)") from exc
         # removed and not re-added: drop its <img>
         draft.html_body = compose.drop_inline_refs(draft.html_body, set(pm.inline) - set(draft.inline_images))
-        msg =self._build(acct, draft, for_draft=True)  # type: ignore[attr-defined]
+        msg = self._build(acct, draft, for_draft=True, untrusted=source == "ai")  # type: ignore[attr-defined]
         with self.session(acct) as sess:  # type: ignore[attr-defined]
             sess.append(env.folder, msg.as_bytes(), ["\\Draft", "\\Seen"])
             sess.select(env.folder)
@@ -154,7 +154,7 @@ class DraftsMixin:
         env, acct = self._draft_env(msg_id)
         if source == "ai":
             self._guard_ai(draft)  # type: ignore[attr-defined]
-        msg = self._build(acct, draft, for_draft=True)  # type: ignore[attr-defined]
+        msg = self._build(acct, draft, for_draft=True, untrusted=source == "ai")  # type: ignore[attr-defined]
         with self.session(acct) as sess:  # type: ignore[attr-defined]
             sess.append(env.folder, msg.as_bytes(), ["\\Draft", "\\Seen"])
             sess.select(env.folder)

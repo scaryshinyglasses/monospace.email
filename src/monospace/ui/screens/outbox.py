@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Markdown, Static
+from textual.widgets import Button, DataTable, Static
 
 
 class OutboxScreen(ModalScreen[None]):
@@ -21,7 +21,7 @@ class OutboxScreen(ModalScreen[None]):
             yield DataTable(cursor_type="row", id="items")
             with VerticalScroll(id="preview"):
                 yield Static("", id="meta")
-                yield Markdown("", id="body")
+                yield Static("", id="body", markup=False)  # untrusted: never interpret markup
             with Horizontal(classes="row"):
                 yield Button("Approve & send", variant="success", id="approve")
                 yield Button("Reject", variant="error", id="reject")
@@ -46,7 +46,7 @@ class OutboxScreen(ModalScreen[None]):
                           it["created"], key=key)
         if not self.items:
             self.query_one("#meta", Static).update("Nothing waiting. 🎉")
-            self.query_one("#body", Markdown).update("")
+            self.query_one("#body", Static).update("")
         table.focus()
 
     def _selected(self) -> dict | None:
@@ -73,15 +73,16 @@ class OutboxScreen(ModalScreen[None]):
             files = [f"{Path(f).resolve()} ({Path(f).stat().st_size:,} B)" if Path(f).exists()
                      else f"{f} (missing!)" for f in d["attachments"]]
             meta += [f"[dim]File[/] {escape(f)}" for f in files]
+        for f in (d.get("inline_images") or {}).values():
+            meta.append(f"[dim]Inline[/] {escape(str(f))}")
         if it.get("error"):
             meta.append(f"[red]last error: {escape(it['error'])}[/]")
         self.query_one("#meta", Static).update("\n".join(meta))
-        text = d.get("body", "")
-        if d.get("html_body"):
-            from monospace.core.mime import html_to_text
-
-            text += "\n\n---\n**HTML part (what most recipients see), as text:**\n\n" + html_to_text(d["html_body"])
-        self.query_one("#body", Markdown).update(text)
+        try:  # what recipients will actually see (sanitized HTML as text, links spelled out)
+            text = self.svc.outbox_review(it)
+        except Exception as exc:
+            text = f"(could not render preview: {exc})"
+        self.query_one("#body", Static).update(text)
 
     @on(Button.Pressed, "#approve")
     def action_approve(self) -> None:

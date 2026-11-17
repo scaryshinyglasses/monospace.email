@@ -186,9 +186,10 @@ class Service(DraftsMixin, FoldersMixin):
         return self.move(msg_id, "trash")
 
     # ---- sending -------------------------------------------------------
-    def _build(self, acct: Account, draft: Draft, *, for_draft: bool = False) -> EmailMessage:
+    def _build(self, acct: Account, draft: Draft, *, for_draft: bool = False,
+               untrusted: bool = False) -> EmailMessage:
         try:
-            msg = compose.build(draft, acct.from_header, signature=acct.signature)
+            msg = compose.build(draft, acct.from_header, signature=acct.signature, untrusted=untrusted)
         except (OSError, ValueError) as exc:
             raise ServiceError(f"attachment error: {exc}") from exc
         if for_draft and draft.bcc:
@@ -223,18 +224,18 @@ class Service(DraftsMixin, FoldersMixin):
         acct = self.account(account)
         if source == "ai" and not trusted:
             self._guard_ai(draft)
-        msg = self._build(acct, draft, for_draft=True)
+        msg = self._build(acct, draft, for_draft=True, untrusted=source == "ai")
         folder = acct.folder("drafts")
         with self.session(acct) as sess:
             sess.append(folder, msg.as_bytes(), ["\\Draft", "\\Seen"])
         return self._drafted(acct, msg["Message-ID"], f"saved to {folder}")
 
-    def send_now(self, account: str | None, draft: Draft) -> SendResult:
+    def send_now(self, account: str | None, draft: Draft, *, untrusted: bool = False) -> SendResult:
         acct = self.account(account)
         rcpts = draft.recipients()
         if not rcpts:
             raise ServiceError("no recipients")
-        msg = self._build(acct, draft)
+        msg = self._build(acct, draft, untrusted=untrusted)
         self._sender(acct, self._credentials(acct), msg, rcpts)
         if acct.provider == "custom":  # Gmail / Microsoft file sent mail themselves
             try:
@@ -254,13 +255,13 @@ class Service(DraftsMixin, FoldersMixin):
             self._guard_ai(draft)
         if source == "ai" and draft.html_body:
             # What a human reviews (outbox, drafts) must be what recipients see: derive the text part
-            # from the agent's HTML instead of trusting a separately supplied body.
-            draft.body = mime.html_to_text(draft.html_body)
+            # from the agent's (sanitized) HTML instead of trusting a separately supplied body.
+            draft.body = compose.review(Draft(html_body=draft.html_body, signature=False))
         action = policy.decide(acct.ai_send, source)
         if action == "send":
-            return self.send_now(acct.name, draft)
+            return self.send_now(acct.name, draft, untrusted=source == "ai")
         if action == "draft":
-            res = self.save_draft(acct.name, draft, trusted=True)  # already guarded above
+            res = self.save_draft(acct.name, draft, "ai" if source == "ai" else "human", trusted=True)
             res.detail += f" (account policy ai_send=draft; a human must send it)"
             return res
         self._snapshot(draft)
@@ -306,12 +307,17 @@ class Service(DraftsMixin, FoldersMixin):
                 if not Path(f).resolve().is_relative_to(snap):
                     raise ServiceError(f"refusing outbox item {item_id}: attachment outside snapshot dir: {f}")
         try:
-            res = self.send_now(item["account"], Draft.from_dict(item["draft"]))
+            res = self.send_now(item["account"], Draft.from_dict(item["draft"]), untrusted=item["source"] == "ai")
         except Exception as exc:
             self.store.outbox_set(item_id, "pending", str(exc))
             raise
         self.store.outbox_set(item_id, "sent")
         return res
+
+    def outbox_review(self, item: dict) -> str:
+        """What the queued message will show recipients, as plain text (sanitized for terminals)."""
+        acct = self.account(item["account"])
+        return compose.review(Draft.from_dict(item["draft"]), signature=acct.signature)
 
     def outbox_cancel(self, item_id: int) -> None:
         """Withdraw a pending item (AI callers may do this — it never sends anything)."""
