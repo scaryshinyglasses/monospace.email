@@ -125,7 +125,11 @@ class AccountAddScreen(ModalScreen[bool]):
         if self.acct.auth == "password":
             if not self.query_one("#password", Input).value:
                 return self._error("Enter the password.")
-            accounts.store_password(self.acct, self.query_one("#password", Input).value)
+            try:
+                accounts.store_password(self.acct, self.query_one("#password", Input).value)
+            except Exception as exc:  # e.g. keyring locked mid-session: show it, don't crash
+                return self._error(f"Could not store the password: {type(exc).__name__}: {exc}. "
+                                   "Restart with MONOSPACE_SECRETS=file to use the encrypted secrets file.")
             self.verify_and_save()
         elif self.acct.auth == "gmail_oauth":
             self._gmail()

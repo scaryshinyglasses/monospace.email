@@ -31,7 +31,9 @@ src/monospace/
     paths.py        XDG dirs; MONOSPACE_HOME relocates everything
     config.py       Account/OAuthClients/Settings, PRESETS (gmail/outlook/custom), hand-written TOML dump
     secrets.py      keyring → EncryptedFileStore (secrets_file.py) fallback; MONOSPACE_SECRETS=keyring|file|memory
+                    keyring_usable() probes a real read (locked GNOME Keyring over SSH → file fallback)
     platform.py     has_display / opener / download dir
+    clipboard.py    OSC 52 (tmux/screen passthrough) + native pbcopy/wl-copy/xclip/xsel; native paste
     auth/           xoauth2 · gmail (loopback + headless paste flow) · outlook (MSAL device code) · tokens (resolve())
     accounts.py     sign-in + IMAP verify shared by CLI and TUI wizards
     imap.py         ImapSession over imapclient (sync; run in threads), UID-based
@@ -58,6 +60,8 @@ src/monospace/
   `data/outbox-files/`. UI only auto-opens passive types (`platform.safe_to_open`) and http(s) links (`safe_url`).
 - Message `id` = SQLite rowid (stable handle for CLI/MCP); IMAP UIDs stay internal.
 - Workers: anything touching the network runs in `@work(thread=True)`; update UI via `call_from_thread`.
+- Never bind `ctrl+c` with `priority=True`: Screen/Input/TextArea use it for copy. `MonospaceApp`
+  overrides `copy_to_clipboard` and the `clipboard` property (what `ctrl+v` pastes) → `core/clipboard.py`.
 - Don't name Textual subclass members after framework internals (`refresh_row`, `_composed` both bit us).
 - Tests use `tests/fakes.py` FakeServer/FakeSession + `MONOSPACE_SECRETS` memory store (conftest autouse).
 - Headless smoke test: ubuntu:24.04 container, `MONOSPACE_PASSPHRASE`, `TERM=linux` under `script`.

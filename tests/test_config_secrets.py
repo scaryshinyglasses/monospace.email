@@ -38,3 +38,52 @@ def test_encrypted_store(tmp_path):
     assert EncryptedFileStore(path, "hunter2").get("a:password") == "secret"
     with pytest.raises(PassphraseError):
         EncryptedFileStore(path, "wrong").get("a:password")
+
+
+def test_locked_keyring_falls_back_to_file(monkeypatch, tmp_path):
+    """A keyring that exists but can't be read (locked GNOME Keyring over SSH) must not be chosen."""
+    import keyring
+    from keyring.backend import KeyringBackend
+    from keyring.errors import KeyringLocked
+
+    from monospace.core import secrets
+
+    class Locked(KeyringBackend):
+        priority = 5
+
+        def get_password(self, service, username):
+            raise KeyringLocked("Failed to unlock the collection!")
+
+        def set_password(self, service, username, password):
+            raise KeyringLocked("Failed to unlock the collection!")
+
+        def delete_password(self, service, username):
+            raise KeyringLocked("Failed to unlock the collection!")
+
+    monkeypatch.setattr(keyring, "get_keyring", lambda: Locked())
+    monkeypatch.setenv("MONOSPACE_SECRETS", "auto")
+    monkeypatch.setenv("MONOSPACE_PASSPHRASE", "pw")
+    secrets.set_store(None)
+    store = secrets.get_store()
+    assert secrets.backend_name() == "file"
+    assert "KeyringLocked" in secrets.fallback_reason()
+    store.set("a:password", "x")
+    assert store.get("a:password") == "x"
+
+
+def test_osc52_wraps_for_tmux(monkeypatch):
+    from monospace.core import clipboard
+
+    monkeypatch.delenv("TMUX", raising=False)
+    monkeypatch.delenv("STY", raising=False)
+    assert clipboard.osc52("hi") == "\x1b]52;c;aGk=\a"
+    monkeypatch.setenv("TMUX", "/tmp/tmux-1/default,1,0")
+    assert clipboard.osc52("hi") == "\x1bPtmux;\x1b\x1b]52;c;aGk=\a\x1b\\"
+
+
+def test_no_native_clipboard_when_headless(monkeypatch):
+    from monospace.core import clipboard, platform
+
+    monkeypatch.setattr(platform, "has_display", lambda: False)
+    assert clipboard.native_paste() is None
+    assert clipboard.native_copy("x") is False

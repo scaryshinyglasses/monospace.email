@@ -127,6 +127,12 @@ monospace doctor     # checks keyring, terminal graphics and connectivity
 
 In compose, `Ctrl+S` sends and `Ctrl+D` saves a draft.
 
+**Copy & paste:** select text with the mouse and press `Ctrl+C` (with nothing selected, `Ctrl+C` quits).
+`Ctrl+V` pastes the system clipboard via `pbpaste` / `wl-paste` / `xclip` / `xsel` when a display is
+available; your terminal's own paste (`Cmd+V`, `Ctrl+Shift+V`) always works. Copies go out over OSC 52
+(wrapped for tmux/screen) plus the native tool, so they reach your local clipboard over SSH too. In tmux, set
+`set -g set-clipboard on` and `set -g allow-passthrough on`.
+
 ## Let your AI read your mail, safely
 
 ```sh
@@ -211,7 +217,7 @@ Some tenants need an admin to enable SMTP AUTH for the mailbox.
 | Links | open in browser | open in browser | copied (OSC 52) | copied |
 | Background sync | launchd | systemd `--user` | systemd `--user` | systemd `--user` |
 
-On machines without a keyring, secrets live in `~/.local/share/monospace/secrets.enc` (Fernet + scrypt, mode `0600`),
+On machines without a usable keyring (none installed, or one that's locked and can't prompt, as with GNOME Keyring over SSH), secrets live in `~/.local/share/monospace/secrets.enc` (Fernet + scrypt, mode `0600`),
 unlocked by `MONOSPACE_PASSPHRASE` or a prompt.
 
 <details>

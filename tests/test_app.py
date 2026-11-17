@@ -120,3 +120,49 @@ async def test_wizard_when_no_accounts(svc):
         assert isinstance(app.screen, AccountAddScreen)
         await pilot.click("#p-custom")
         assert app.screen.query_one("#servers").display
+
+
+async def test_ctrl_c_copies_selection_instead_of_quitting(svc, monkeypatch):
+    """ctrl+c used to be a priority quit binding, so copy never ran."""
+    from textual.widgets import Input
+
+    from monospace.core import clipboard
+    from monospace.ui.app import MonospaceApp
+    from monospace.ui.screens.compose import ComposeScreen
+    from monospace.core.compose import Draft
+
+    monkeypatch.setattr(clipboard, "native_copy", lambda text: False)
+    monkeypatch.setattr(clipboard, "native_paste", lambda: None)
+    app = MonospaceApp(svc, images=False, watch=False)
+    async with app.run_test() as pilot:
+        app.push_screen(ComposeScreen(Draft(subject="hello"), "work", [("work", "me@example.com")]))
+        await pilot.pause()
+        inp = next(w for w in app.screen.query(Input) if w.value == "hello")
+        inp.focus()
+        inp.select_all()
+        await pilot.press("ctrl+c")
+        await pilot.pause()
+        assert app.is_running
+        assert app.clipboard == "hello"
+        inp.value = ""
+        await pilot.press("ctrl+v")
+        assert inp.value == "hello"
+
+
+async def test_ctrl_v_pastes_system_clipboard(svc, monkeypatch):
+    from textual.widgets import Input
+
+    from monospace.core import clipboard
+    from monospace.core.compose import Draft
+    from monospace.ui.app import MonospaceApp
+    from monospace.ui.screens.compose import ComposeScreen
+
+    monkeypatch.setattr(clipboard, "native_paste", lambda: "from-system")
+    app = MonospaceApp(svc, images=False, watch=False)
+    async with app.run_test() as pilot:
+        app.push_screen(ComposeScreen(Draft(), "work", [("work", "me@example.com")]))
+        await pilot.pause()
+        inp = app.screen.query(Input).first()
+        inp.focus()
+        await pilot.press("ctrl+v")
+        assert "from-system" in inp.value

@@ -56,18 +56,36 @@ class MemoryStore:
         self.data.pop(key, None)
 
 
+_fallback_reason = ""
+
+
 def keyring_usable() -> bool:
+    """True only if the keyring can actually be read right now.
+
+    A backend can exist but be unusable: on a headless Linux box GNOME Keyring is often
+    reachable over D-Bus yet locked, with no way to show the unlock prompt
+    (``KeyringLocked: Failed to unlock the collection!``). Probe with a real read.
+    """
+    global _fallback_reason
     try:
         import keyring
         from keyring.backends import fail, null
 
         backend = keyring.get_keyring()
-        if isinstance(backend, (fail.Keyring, null.Keyring)):
-            return False
         # chainer with zero usable backends is also a failure
-        return getattr(backend, "priority", 1) > 0
-    except Exception:
+        if isinstance(backend, (fail.Keyring, null.Keyring)) or getattr(backend, "priority", 1) <= 0:
+            _fallback_reason = "no OS keyring backend"
+            return False
+        backend.get_password(SERVICE, "__probe__")
+        return True
+    except Exception as exc:
+        _fallback_reason = f"OS keyring unusable ({type(exc).__name__}: {exc})"
         return False
+
+
+def fallback_reason() -> str:
+    """Why the encrypted file store was chosen over the keyring ("" if it wasn't)."""
+    return _fallback_reason if _backend_name == "file" else ""
 
 
 _store: SecretStore | None = None
@@ -88,12 +106,18 @@ def get_store(prompt: Callable[[str], str] | None = None) -> SecretStore:
     elif choice == "keyring" or (choice == "auto" and keyring_usable()):
         _store, _backend_name = KeyringStore(), "keyring"
     else:
+        _backend_name = "file"
+        if prompt is not None and _fallback_reason:
+            import sys
+
+            print(f"monospace: {_fallback_reason}; using the encrypted secrets file instead.", file=sys.stderr)
         phrase = os.environ.get("MONOSPACE_PASSPHRASE", "")
         if not phrase and prompt is not None:
             phrase = prompt("Passphrase for monospace secrets file: ")
         if not phrase:
+            why = _fallback_reason or "no OS keyring available"
             raise PassphraseError(
-                "no OS keyring available; set MONOSPACE_PASSPHRASE to unlock the encrypted secrets file"
+                f"{why}; set MONOSPACE_PASSPHRASE to unlock the encrypted secrets file"
             )
         _store, _backend_name = EncryptedFileStore(paths.secrets_file(), phrase), "file"
     return _store

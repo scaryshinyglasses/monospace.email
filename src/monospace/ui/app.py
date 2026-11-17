@@ -16,7 +16,7 @@ from textual import work
 from textual.app import App
 from textual.binding import Binding
 
-from monospace.core import platform
+from monospace.core import clipboard, platform
 from monospace.core.compose import Draft
 from monospace.core.service import Service
 from monospace.core.watch import Watcher
@@ -29,7 +29,9 @@ from monospace.ui.screens.outbox import OutboxScreen
 class MonospaceApp(App):
     TITLE = "monospace.email"
     CSS_PATH = Path(__file__).with_name("theme.tcss")
-    BINDINGS = [Binding("q", "quit", "Quit"), Binding("ctrl+c", "quit", "Quit", show=False, priority=True)]
+    # ctrl+c is NOT priority: Screen/Input/TextArea bind it to copy and skip when nothing is
+    # selected, so it copies a selection and otherwise falls through to quit.
+    BINDINGS = [Binding("q", "quit", "Quit"), Binding("ctrl+c", "quit", "Quit", show=False)]
 
     def __init__(self, svc: Service, *, images: bool = True, watch: bool = True) -> None:
         super().__init__()
@@ -69,6 +71,20 @@ class MonospaceApp(App):
     def on_unmount(self) -> None:
         if self.watcher:
             self.watcher.stop()
+
+    # ---- clipboard ------------------------------------------------------
+    def copy_to_clipboard(self, text: str) -> None:
+        """OSC 52 (tmux/screen-aware, works over SSH) plus the native tool when there's a display."""
+        self._clipboard = text
+        if self._driver is not None:
+            self._driver.write(clipboard.osc52(text))
+        clipboard.native_copy(text)
+
+    @property
+    def clipboard(self) -> str:
+        """What ctrl+v pastes: the system clipboard when readable, else the last in-app copy."""
+        system = clipboard.native_paste()
+        return system if system else self._clipboard
 
     # ---- shared actions -------------------------------------------------
     def open_link(self, href: str) -> None:

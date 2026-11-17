@@ -34,7 +34,8 @@ def run(cfg: Config, *, as_json: bool = False, offline: bool = False) -> int:
     checks.append(("cache", True, str(paths.cache_db())))
     try:
         secrets.get_store()
-        checks.append(("secrets", True, secrets.backend_name()))
+        why = secrets.fallback_reason()
+        checks.append(("secrets", True, secrets.backend_name() + (f" ({why})" if why else "")))
     except Exception as exc:
         checks.append(("secrets", False, str(exc)))
     checks.append(("display", True, "yes" if platform.has_display() else "headless (paste-URL OAuth, no opener)"))
