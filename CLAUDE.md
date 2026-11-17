@@ -26,7 +26,7 @@ Textual SVG screenshots of a FakeServer demo mailbox.
 src/monospace/
   cli/          main.py (argparse dispatch, TUI default) · mail.py (send/draft/reply: --attach ≠ --inline, --html)
                 manage.py (forward · drafts ls|show|edit|send|rm · folders create|rename|rm) · accounts.py (+ `oauth`)
-                outbox.py · doctor.py · update.py · mcp_setup.py (`mcp install claude|codex`) · daemon.py (systemd/launchd) · output.py (json, interactive())
+                outbox.py · agent_dirs.py (interactive-only) · doctor.py · update.py · mcp_setup.py (`mcp install claude|codex`) · daemon.py (systemd/launchd) · output.py (json, interactive())
   mcp_server.py MCPServer (mcp 2.x — FastMCP was renamed) tools wrapping core.service
   mcp_drafts.py draft edit/send/delete, folder ops, outbox_cancel, InlineImage model, apply_extras
   core/         ← NO UI IMPORTS (tests/test_purity.py enforces; also ≤350 lines/file)
@@ -50,7 +50,8 @@ src/monospace/
     drafts.py       DraftsMixin: get/update/delete/send drafts (Drafts folder only). Edit = APPEND new
                     (same Message-ID) + expunge old; existing parts materialized to data/draft-files/
     folders.py      FoldersMixin: create/rename/delete (delete: empty, non-system only)
-    policy.py       ai_send: draft | confirm(queue) | allow — applies to source="ai" only
+    policy.py       ai_send: draft | confirm(queue) | allow — applies to source="ai" only; agent file roots
+    sanitize.py     agent HTML allowlist (built with untrusted=True) · review_text for approval UIs · terminal_safe
     service.py      THE façade (blocking). TUI, CLI and MCP all go through it.
   render/       html_blocks (selectolax lexbor → Text/Image blocks) · images (cid/data/remote opt-in) · gif
   ui/           app.py (MonospaceApp; imports image_view FIRST — textual_image probes the terminal at import)
@@ -67,7 +68,9 @@ src/monospace/
 - `submit`/`save_draft(trusted=True)` skips the agent-file guard: use it only for parts *we* materialized
   (a stored draft, a forwarded original), after guarding any agent-supplied files.
 - Agent attachments: `policy.check_agent_attachments` confines `source="ai"` attachments (and inline images) to
-  `agent_attachment_dir` (resolve + is_relative_to, symlinks rejected); queued outbox items snapshot files into
+  `policy.agent_roots` = `agent_attachment_dir` + `settings.agent_read_dirs` (added only via interactive
+  `monospace agent-dirs add`, `validate_read_dir` refuses /, home, hidden dirs, our own data);
+  resolve + is_relative_to, symlinks rejected; queued outbox items snapshot files into
   `data/outbox-files/`. UI only auto-opens passive types (`platform.safe_to_open`) and http(s) links (`safe_url`).
 - Message `id` = SQLite rowid (stable handle for CLI/MCP); IMAP UIDs stay internal.
 - Workers: anything touching the network runs in `@work(thread=True)`; update UI via `call_from_thread`.

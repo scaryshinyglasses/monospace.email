@@ -7,6 +7,7 @@ import sys
 
 from monospace import __version__
 from monospace.cli import accounts as cli_accounts
+from monospace.cli import agent_dirs as cli_agent_dirs
 from monospace.cli import mail as cli_mail
 from monospace.cli import manage as cli_manage
 from monospace.cli import mcp_setup as cli_mcp_setup
@@ -26,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--no-images", action="store_true", help="show image placeholders instead of pixels")
     cli_accounts.add_parsers(sub)
     cli_mail.add_parsers(sub)
+    cli_agent_dirs.add_parsers(sub)
     cli_manage.add_parsers(sub)
     cli_outbox.add_parsers(sub)
     cli_update.add_parsers(sub)
@@ -81,6 +83,8 @@ def _dispatch(cmd: str, args: argparse.Namespace) -> int:
         secrets.get_store(prompt, confirm)
     if cmd in ("account", "oauth"):
         return cli_accounts.run(args, cfg)
+    if cmd == "agent-dirs":
+        return cli_agent_dirs.run(args, cfg)
     if cmd == "doctor":
         from monospace.cli import doctor
 

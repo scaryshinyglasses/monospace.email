@@ -76,8 +76,8 @@ def register(server: MCPServer, run: Run) -> None:
         inline images render inside the body (e.g. a logo). Reference one from markdown as
         `![Logo](logo.png)` or from HTML as `<img src="cid:logo.png">`; otherwise it is placed at
         `position` top/bottom. Passing `body` (markdown) without `html_body` re-renders the HTML.
-        Remove items by file name. New files must be inside the user's agent-attachments folder
-        (list_accounts → attachment_dir); copy them there first."""
+        Remove items by file name. New files must be inside one of `readable_dirs` (list_accounts);
+        use them in place by absolute path."""
         return (await run(lambda s: s.update_draft(
             id, source="ai", to=to, cc=cc, bcc=bcc, subject=subject, body=body, html_body=html_body,
             add_attachments=add_attachments, remove_attachments=remove_attachments,

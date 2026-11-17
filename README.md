@@ -198,7 +198,11 @@ the original's attachments.
 
 **Guardrails built into the code, not into a prompt:**
 - There's **no** tool to approve the outbox or change the policy. Those commands refuse to run without an interactive terminal.
-- Agents can only attach files from one folder you control (shown by `list_accounts`). Paths outside it are rejected, including `~/.ssh/...` and escapes through symlinks.
+- Agents can only attach or embed files from folders you control (shown by `list_accounts`): the agent-attachments
+  folder, plus any you add with `monospace agent-dirs add ~/Documents/brand` (interactive only; `/`, your home
+  folder and hidden folders like `~/.ssh` are refused). Everything else is rejected, including escapes through symlinks.
+- Agent-written HTML is sanitized before it's sent: no CSS, scripts, remote images or hidden content. The outbox
+  shows you exactly what recipients will see, with link targets spelled out.
 - Attachments on queued messages are snapshotted, so the file you approve is the file that gets sent.
 - Email bodies are handed to the model **marked as untrusted content**, which is a defence against prompt injection.
 

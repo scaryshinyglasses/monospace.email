@@ -49,8 +49,8 @@ COMPOSE_NOTE = """
         `attachments` = files the recipient downloads. `inline_images` = images shown INSIDE the body
         (logo, screenshot): a path or {path, alt, width, height, position: top|bottom, align, link}.
         Reference one in the body as `![Logo](logo.png)` / `<img src="cid:logo.png">` to place it
-        yourself; otherwise it goes at `position`. All files must be inside attachment_dir
-        (list_accounts) — copy them there first."""
+        yourself; otherwise it goes at `position`. Files must be inside one of `readable_dirs`
+        (list_accounts) — use them in place by absolute path; relative paths mean attachment_dir."""
 
 
 def _doc(text: str) -> str:
@@ -67,12 +67,16 @@ def build_server(get_service: Callable[[], Service]) -> MCPServer:
 
     @server.tool(annotations=READ)
     async def list_accounts() -> list[dict]:
-        """List configured mail accounts, their AI send policy, and the only folder you may attach from."""
+        """List mail accounts, their AI send policy, and `readable_dirs`: the only folders you may
+        attach or embed files from (the user adds more with `monospace agent-dirs add`)."""
         def go(s: Service) -> list[dict]:
             from monospace.core.policy import agent_attachment_dir
 
+            from monospace.core.policy import agent_roots
+
             folder = str(agent_attachment_dir(s.cfg.settings.agent_attachment_dir))
-            return [{**a, "attachment_dir": folder} for a in s.accounts()]
+            dirs = [str(p) for p in agent_roots(s.cfg.settings)]
+            return [{**a, "attachment_dir": folder, "readable_dirs": dirs} for a in s.accounts()]
 
         return await run(go)
 

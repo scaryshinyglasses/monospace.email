@@ -112,7 +112,7 @@ class DraftsMixin:
             raise ServiceError(str(exc)) from exc
         new_inline = [p for p, _ in specs]
         if source == "ai":  # guard agent-supplied files before touching anything
-            allowed = policy.agent_attachment_dir(self.cfg.settings.agent_attachment_dir)  # type: ignore[attr-defined]
+            allowed = policy.agent_roots(self.cfg.settings)  # type: ignore[attr-defined]
             new_files = policy.check_agent_attachments(new_files, allowed) if new_files else []
             new_inline = policy.check_agent_attachments(new_inline, allowed) if new_inline else []
         draft, pm = self.load_draft(msg_id)

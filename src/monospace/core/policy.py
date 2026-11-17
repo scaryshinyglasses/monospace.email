@@ -44,21 +44,60 @@ def agent_attachment_dir(configured: str = "") -> "Path":
     return path
 
 
-def check_agent_attachments(files: list[str], allowed: "Path") -> list[str]:
+def agent_roots(settings: "object") -> "list[Path]":
+    """Every folder agents may read files from: the attachment dir plus human-approved extras."""
     from pathlib import Path
 
-    root = allowed.resolve()
+    roots = [agent_attachment_dir(getattr(settings, "agent_attachment_dir", ""))]
+    for raw in getattr(settings, "agent_read_dirs", []) or []:
+        p = Path(raw).expanduser()
+        if p.is_dir():
+            roots.append(p)
+    return roots
+
+
+def validate_read_dir(raw: str) -> "Path":
+    """Refuse folders that would expose secrets: /, home or its parents, hidden dirs, our own data."""
+    from pathlib import Path
+
+    from monospace.core import paths
+
+    p = Path(raw).expanduser()
+    try:
+        real = p.resolve(strict=True)
+    except OSError as exc:
+        raise AttachmentPolicyError(f"no such folder: {raw}") from exc
+    if not real.is_dir():
+        raise AttachmentPolicyError(f"not a folder: {raw}")
+    home = Path.home().resolve()
+    if real == Path(real.anchor) or real == home or home.is_relative_to(real):
+        raise AttachmentPolicyError(f"{real} is too broad; pick a specific folder (e.g. ~/Documents/logos)")
+    rel = real.relative_to(home) if real.is_relative_to(home) else real
+    if any(part.startswith(".") for part in rel.parts):
+        raise AttachmentPolicyError(f"{real} is inside a hidden folder (keys and config live there)")
+    for own in (paths.config_dir(), paths.data_dir()):
+        own = own.resolve()
+        if real.is_relative_to(own) or own.is_relative_to(real):
+            raise AttachmentPolicyError(f"{real} overlaps monospace's own config/data ({own})")
+    return real
+
+
+def check_agent_attachments(files: list[str], allowed: "Path | list[Path]") -> list[str]:
+    from pathlib import Path
+
+    roots = [r.resolve() for r in (allowed if isinstance(allowed, list) else [allowed])]
     out = []
     for raw in files:
         p = Path(raw).expanduser()
         if not p.is_absolute():
-            p = root / p
+            p = roots[0] / p
         try:
             real = p.resolve(strict=True)
         except OSError as exc:
             raise AttachmentPolicyError(f"attachment not found: {raw}") from exc
-        if not real.is_relative_to(root) or not real.is_file():
+        if not real.is_file() or not any(real.is_relative_to(r) for r in roots):
             raise AttachmentPolicyError(
-                f"agents may only attach files inside {root} (got {raw}); copy the file there first")
+                f"agents may only use files inside {', '.join(map(str, roots))} (got {raw}). Copy it to "
+                f"{roots[0]}, or ask the user to run `monospace agent-dirs add <folder>` in a terminal.")
         out.append(str(real))
     return out

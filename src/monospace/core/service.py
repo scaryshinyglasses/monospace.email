@@ -198,7 +198,7 @@ class Service(DraftsMixin, FoldersMixin):
 
     def _guard_ai(self, draft: Draft) -> None:
         if draft.attachments or draft.inline_images:
-            allowed = policy.agent_attachment_dir(self.cfg.settings.agent_attachment_dir)
+            allowed = policy.agent_roots(self.cfg.settings)
             draft.attachments = policy.check_agent_attachments(draft.attachments, allowed)
             draft.inline_images = dict(zip(draft.inline_images, policy.check_agent_attachments(
                 list(draft.inline_images.values()), allowed)))

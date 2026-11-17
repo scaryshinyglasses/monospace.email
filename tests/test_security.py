@@ -67,3 +67,36 @@ def test_approve_refuses_unsnapshotted_ai_item(svc, tmp_path):
     item = svc.store.outbox_add("work", Draft(to=["x@y.com"], attachments=[str(secret)]).to_dict(), "ai")
     with pytest.raises(ServiceError, match="snapshot"):
         svc.outbox_approve(item)
+
+
+def test_agent_read_dirs(svc, tmp_path, monkeypatch):
+    import pytest
+
+    from monospace.core import compose, policy
+    from monospace.core.compose import Draft
+
+    brand = tmp_path / "brand"
+    brand.mkdir()
+    (brand / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    d = Draft(to=["x@y.com"], subject="s", body="b")
+    compose.add_inline(d, str(brand / "logo.png"))
+    with pytest.raises(policy.AttachmentPolicyError, match="agent-dirs add"):
+        svc.save_draft(None, Draft(**{**d.to_dict()}), "ai")
+    svc.cfg.settings.agent_read_dirs = [str(brand)]
+    assert svc.save_draft(None, d, "ai").status == "drafted"  # used in place, no copy
+    # unsafe folders are refused
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".ssh").mkdir()
+    for bad in (str(tmp_path), str(tmp_path / ".ssh"), "/"):
+        with pytest.raises(policy.AttachmentPolicyError):
+            policy.validate_read_dir(bad)
+    assert policy.validate_read_dir(str(brand)) == brand.resolve()
+
+
+def test_agent_dirs_cli_refuses_agents(svc, monkeypatch, tmp_path):
+    from monospace.cli import main as cli
+
+    monkeypatch.setattr("monospace.core.config.load", lambda: svc.cfg)
+    monkeypatch.setenv("MONOSPACE_AGENT", "1")
+    assert cli.main(["agent-dirs", "add", str(tmp_path)]) == 2
+    assert svc.cfg.settings.agent_read_dirs == []

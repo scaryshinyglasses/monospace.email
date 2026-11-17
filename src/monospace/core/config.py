@@ -89,7 +89,10 @@ class Settings:
     images: bool = True
     remote_images: bool = False
     download_dir: str = ""
-    agent_attachment_dir: str = ""  # the only folder AI agents may attach files from
+    agent_attachment_dir: str = ""  # the folder AI agents may attach / embed files from
+    # extra folders agents may READ attachments / inline images from; humans add them with
+    # `monospace agent-dirs add` (interactive only)
+    agent_read_dirs: list[str] = field(default_factory=list)
     theme: str = "tokyo-night"  # any Textual theme; ctrl+p → Theme saves it here
     check_updates: bool = True  # daily GitHub check → in-app notice; never installs
 
@@ -147,6 +150,8 @@ def _toml_value(v: object) -> str:
         return "true" if v else "false"
     if isinstance(v, int):
         return str(v)
+    if isinstance(v, list):
+        return "[" + ", ".join(_toml_value(x) for x in v) + "]"
     if isinstance(v, dict):
         inner = ", ".join(f"{_toml_key(k)} = {_toml_value(x)}" for k, x in v.items())
         return "{ " + inner + " }" if inner else "{}"
