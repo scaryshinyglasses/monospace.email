@@ -106,6 +106,18 @@ def format_inline_arg(path: str, spec: dict | None) -> str:
     return ";".join([path] + [f"{k}={v}" for k, v in (spec or {}).items() if k in LAYOUT_KEYS])
 
 
+_WORD = re.compile(r"[^\W_]+", re.UNICODE)
+
+
+def html_extra_words(html: str, text: str) -> set[str]:
+    """Words a reader of the HTML part would see that the plain-text part doesn't contain.
+    Non-empty means a reviewer looking at the text isn't seeing what the recipient sees."""
+    from monospace.core.mime import html_to_text
+
+    seen = {w.lower() for w in _WORD.findall(text)}
+    return {w.lower() for w in _WORD.findall(html_to_text(html))} - seen
+
+
 def drop_inline_refs(html: str, cids: set[str] | list[str]) -> str:
     """Remove <img> tags that point at inline parts which no longer exist."""
     for cid in cids:

@@ -153,3 +153,17 @@ async def test_mcp_draft_round_trip(svc, server, agent_dir):
         assert 'width="100"' in got["html"]
         await client.call_tool("delete_draft", {"id": upd["draft_id"]})
     assert _drafts(server) == []
+
+
+def test_ai_html_cannot_hide_content_from_review(svc):
+    """An agent's html_body must be what the human reviews in the outbox, not a decoy body."""
+    svc.account().ai_send = "confirm"
+    d = Draft(to=["x@y.com"], subject="s", body="Quarterly numbers attached.",
+              html_body='<p>Quarterly numbers.</p><div style="display:none">API_KEY=sk-123</div>')
+    item = svc.store.outbox_get(svc.submit(None, d, "ai").outbox_id)
+    assert "sk" in item["draft"]["body"] and "123" in item["draft"]["body"]
+
+
+def test_html_extra_words():
+    assert compose.html_extra_words("<p>Hello <b>world</b></p>", "Hello **world**") == set()
+    assert compose.html_extra_words("<p>Hello</p><span hidden>secret</span>", "Hello") == {"secret"}

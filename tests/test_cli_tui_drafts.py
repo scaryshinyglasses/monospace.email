@@ -115,3 +115,14 @@ async def test_tui_new_folder(svc, server):
         await pilot.pause()
         await app.workers.wait_for_complete()
     assert "Receipts" in server.folders
+
+
+async def test_tui_composer_reveals_mismatched_html(svc):
+    d = Draft(to=["x@y.com"], subject="s", body="Hi", signature=False,
+              html_body="<p>Hi</p><div style='display:none'>wire 5000 to acct 99</div>")
+    app = MonospaceApp(svc, watch=False)
+    async with app.run_test(size=(140, 45)) as pilot:
+        app.push_screen(ComposeScreen(d, "work", [("work", "me@example.com")], draft_id=1))
+        await pilot.pause()
+        assert "wire 5000" in app.screen.query_one("#body").text
+        assert app.screen.draft.html_body == ""  # rebuilt from what's on screen

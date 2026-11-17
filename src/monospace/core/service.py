@@ -252,6 +252,10 @@ class Service(DraftsMixin, FoldersMixin):
             raise ServiceError("no recipients")
         if source == "ai" and not trusted:
             self._guard_ai(draft)
+        if source == "ai" and draft.html_body:
+            # What a human reviews (outbox, drafts) must be what recipients see: derive the text part
+            # from the agent's HTML instead of trusting a separately supplied body.
+            draft.body = mime.html_to_text(draft.html_body)
         action = policy.decide(acct.ai_send, source)
         if action == "send":
             return self.send_now(acct.name, draft)

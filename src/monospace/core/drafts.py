@@ -87,6 +87,7 @@ class DraftsMixin:
         return {
             "id": env.id, "account": acct.name, "to": pm.to, "cc": pm.cc, "bcc": pm.bcc,
             "subject": pm.subject, "body": _strip_signature(pm.text, acct.signature), "html": pm.html,
+            "html_matches_body": not (pm.html and compose.html_extra_words(pm.html, pm.text)),
             "attachments": [{"filename": p.filename, "content_type": p.content_type, "size": p.size}
                             for p in pm.attachments],
             "inline_images": [{"cid": cid, "filename": p.filename, "content_type": p.content_type,

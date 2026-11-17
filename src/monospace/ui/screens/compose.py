@@ -39,6 +39,13 @@ class ComposeScreen(ModalScreen[ComposeResultData | None]):
         super().__init__()
         self.draft, self.account, self.accounts, self.draft_id = draft, account, accounts, draft_id
         self._cid_by_path = {p: cid for cid, p in draft.inline_images.items()}
+        self._html_replaced = False
+        if draft.html_body and composer.html_extra_words(draft.html_body, draft.body):
+            # The stored HTML says things the text part doesn't: show the HTML's text and rebuild the
+            # HTML from what's on screen, so what you review is what gets sent.
+            from monospace.core.mime import html_to_text
+
+            draft.body, draft.html_body, self._html_replaced = html_to_text(draft.html_body), "", True
 
     def compose(self) -> ComposeResult:
         d = self.draft
@@ -61,7 +68,10 @@ class ComposeScreen(ModalScreen[ComposeResultData | None]):
             yield Input(inline, id="inline",
                         placeholder="Inline images (in the body): logo.png;width=120;position=top, … "
                                     "or ![Logo](logo.png) in the body")
-            if self.draft_id and d.html_body:
+            if self._html_replaced:
+                yield Static("[b $warning]The HTML part differed from the text — showing the HTML's text; "
+                             "the HTML will be rebuilt from this body.[/]")
+            elif self.draft_id and d.html_body:
                 yield Static("[dim]This draft has an HTML part; it is kept unless you change the body text.[/]")
             yield Label("", classes="error", id="error")
             with Horizontal(classes="row"):

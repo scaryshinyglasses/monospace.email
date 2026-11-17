@@ -76,7 +76,12 @@ class OutboxScreen(ModalScreen[None]):
         if it.get("error"):
             meta.append(f"[red]last error: {escape(it['error'])}[/]")
         self.query_one("#meta", Static).update("\n".join(meta))
-        self.query_one("#body", Markdown).update(d.get("body", ""))
+        text = d.get("body", "")
+        if d.get("html_body"):
+            from monospace.core.mime import html_to_text
+
+            text += "\n\n---\n**HTML part (what most recipients see), as text:**\n\n" + html_to_text(d["html_body"])
+        self.query_one("#body", Markdown).update(text)
 
     @on(Button.Pressed, "#approve")
     def action_approve(self) -> None:

@@ -92,7 +92,12 @@ def _show_draft(d: dict) -> None:
         print(f"\n📎 {a['filename']} ({a['content_type']}, {a['size']:,} bytes)")
     for i in d["inline_images"]:
         print(f"🖼  inline {i['filename']} ({i['content_type']}, {i['size']:,} bytes, cid {i['cid']})")
-    if d["html"]:
+    if d["html"] and not d["html_matches_body"]:
+        from monospace.core.mime import html_to_text
+
+        print("\n⚠ The HTML part (what most recipients see) differs from the text above. It reads:\n")
+        print(html_to_text(d["html"]))
+    elif d["html"]:
         print("\n(has an HTML part — `monospace read --raw` to see it)")
 
 

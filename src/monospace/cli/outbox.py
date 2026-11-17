@@ -33,6 +33,13 @@ def _show(item: dict) -> None:
             p = Path(f).resolve()
             print(f"Attachment: {p} ({p.stat().st_size:,} bytes)" if p.exists() else f"Attachment: {f} (missing!)")
     print("\n" + d.get("body", ""))
+    if d.get("html_body"):
+        from monospace.core.mime import html_to_text
+
+        print("\n--- HTML part (what most recipients see), as text ---\n" + html_to_text(d["html_body"]))
+    if d.get("inline_images"):
+        for f in d["inline_images"].values():
+            print(f"Inline image: {f}")
     if item.get("error"):
         print(f"\nlast error: {item['error']}")
 
