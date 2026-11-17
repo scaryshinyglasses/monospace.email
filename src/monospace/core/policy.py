@@ -50,11 +50,24 @@ SECRET_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".kdbx", ".keychain", ".keych
                    ".ovpn", ".ppk", ".jks", ".keystore"}
 
 
+SECRET_SUFFIXES |= {".p8", ".der", ".crt", ".cer", ".tfstate", ".tfvars", ".sqlite", ".db", ".env"}
+_SECRET_HINTS = ("credential", "secret", "service-account", "serviceaccount", "token", "password",
+                 "passwd", "private", "apikey", "api_key", "api-key")
+# Folders added with `agent-dirs add` may hold anything; from those, agents may only send everyday
+# document and image types. The agent-attachments folder (curated by the user) allows any type.
+READ_DIR_TYPES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tif", ".tiff", ".heic",
+                  ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp", ".rtf",
+                  ".txt", ".md", ".csv", ".ics", ".vcf", ".mp3", ".m4a", ".mp4", ".mov"}
+
+
 def _secret_like(rel: "Path") -> bool:
     """Hidden files/folders (.env, .git, .ssh …) or key material anywhere under an approved root."""
     name = rel.name.lower()
-    return (any(part.startswith(".") for part in rel.parts) or name in SECRET_NAMES
-            or any(name.endswith(s) for s in SECRET_SUFFIXES))
+    if any(part.startswith(".") for part in rel.parts) or name in SECRET_NAMES:
+        return True
+    if name.startswith("id_") and not name.endswith(".pub") or name.endswith("_sk"):
+        return True  # ssh keys in any flavour (id_rsa_work, id_ed25519_sk, …)
+    return any(name.endswith(s) for s in SECRET_SUFFIXES) or any(h in name for h in _SECRET_HINTS)
 
 
 def agent_roots(settings: "object") -> "list[Path]":
@@ -113,6 +126,10 @@ def check_agent_attachments(files: list[str], allowed: "Path | list[Path]") -> l
         root = next((r for r in roots if real.is_relative_to(r)), None)
         if root is not None and _secret_like(real.relative_to(root)):
             raise AttachmentPolicyError(f"agents may not send hidden files or key material: {raw}")
+        if root is not None and root != roots[0] and real.suffix.lower() not in READ_DIR_TYPES:
+            raise AttachmentPolicyError(
+                f"from approved folders agents may only send documents and images ({raw}); "
+                f"copy other files to {roots[0]} yourself")
         if not real.is_file() or root is None:
             raise AttachmentPolicyError(
                 f"agents may only use files inside {', '.join(map(str, roots))} (got {raw}). Copy it to "

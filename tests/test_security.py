@@ -122,3 +122,23 @@ def test_hidden_and_key_files_refused_inside_roots(svc, tmp_path, monkeypatch):
     (tmp_path / "Library" / "Mail").mkdir(parents=True)
     with pytest.raises(policy.AttachmentPolicyError):
         policy.validate_read_dir(str(tmp_path / "Library" / "Mail"))
+
+
+def test_read_dirs_allow_only_document_types(tmp_path):
+    import pytest
+
+    from monospace.core import policy
+
+    primary, extra = tmp_path / "att", tmp_path / "docs"
+    primary.mkdir()
+    extra.mkdir()
+    for name in ("logo.png", "report.pdf", "id_rsa_work", "gcp-service-account.json", "infra.tfstate",
+                 "notes.json", "id_rsa_work.pub"):
+        (extra / name).write_text("x")
+    (primary / "data.json").write_text("x")
+    roots = [primary, extra]
+    assert policy.check_agent_attachments([str(extra / "logo.png"), str(extra / "report.pdf")], roots)
+    assert policy.check_agent_attachments([str(primary / "data.json")], roots)  # curated folder: any type
+    for name in ("id_rsa_work", "gcp-service-account.json", "infra.tfstate", "notes.json", "id_rsa_work.pub"):
+        with pytest.raises(policy.AttachmentPolicyError):
+            policy.check_agent_attachments([str(extra / name)], roots)
