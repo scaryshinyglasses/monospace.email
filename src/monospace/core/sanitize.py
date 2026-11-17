@@ -22,6 +22,7 @@ KEEP = {"p", "br", "hr", "div", "span", "b", "strong", "i", "em", "u", "s", "del
 ATTRS = {"a": {"href"}, "img": {"src", "alt", "width", "height"}, "td": {"colspan", "rowspan", "align"},
          "th": {"colspan", "rowspan", "align"}, "p": {"align"}, "div": {"align"}}
 _SAFE_HREF = re.compile(r"^(https?://|mailto:)[^\s<>\"'`\\]+$", re.I)
+_CID_SRC = re.compile(r"^cid:[A-Za-z0-9._@-]+$")
 _ALT_BAD = re.compile(r"[<>\"'`&]|--")
 _TEXT_URL = re.compile(r"(?:https?://|mailto:)[^\s<>()\[\]\"'`]+", re.I)
 _CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f​-‏‪-‮⁦-⁩]")
@@ -99,6 +100,12 @@ def _sanitize_once(html: str) -> str:
                 del node.attrs[name]
             elif name == "alt" and _ALT_BAD.search(value):
                 node.attrs[name] = _ALT_BAD.sub("", value)[:200]
+            elif name == "src" and not _CID_SRC.match(value):
+                del node.attrs[name]
+            elif name == "align" and value.strip().lower() not in ("left", "right", "center", "justify"):
+                del node.attrs[name]
+            elif name in ("colspan", "rowspan") and not value.strip().isdigit():
+                del node.attrs[name]
             elif name in ("width", "height") and not value.strip().isdigit():
                 del node.attrs[name]
         if tag == "img" and not (node.attributes.get("src") or "").startswith("cid:"):
@@ -106,40 +113,85 @@ def _sanitize_once(html: str) -> str:
     return body.inner_html or ""
 
 
+_BLOCK = {"p", "div", "br", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table", "blockquote",
+          "pre", "hr", "ul", "ol", "dl", "dt", "dd", "caption"}
+
+
+class _Mismatch(Exception):
+    pass
+
+
+def _url_like(text: str) -> bool:
+    return bool(_TEXT_URL.fullmatch(text.strip()))
+
+
+def _render(node, *, images: bool, strict: bool) -> str:  # type: ignore[no-untyped-def]
+    """Text a recipient sees, taken from the DOM (never from serialized markup or attributes).
+    Each link is followed by its target; ``strict`` raises when a link's text is a different URL."""
+    out: list[str] = []
+    child = node.child
+    while child is not None:
+        tag = (child.tag or "").lower()
+        if tag == "-text":
+            out.append(child.text(deep=False) or "")
+        elif tag == "a" and child.attributes.get("href"):
+            href = child.attributes.get("href") or ""
+            inner = _render(child, images=images, strict=strict)
+            if _url_like(inner) and normalize_url(inner) == normalize_url(href):
+                out.append(f" <{href}> ")  # the text already is the target
+            else:
+                if strict and _url_like(inner):
+                    raise _Mismatch  # shows one URL, goes to another
+                out.append(f"{inner} <{href}> ")
+        elif tag == "img":
+            if images:
+                out.append(f"[image {child.attributes.get('alt') or ''} ({child.attributes.get('src') or ''})]")
+        elif not tag.startswith("-"):
+            text = _render(child, images=images, strict=strict)
+            out.append(f"\n{text}\n" if tag in _BLOCK else text)
+        child = child.next
+    return "".join(out)
+
+
+def _tidy(text: str) -> str:
+    lines = [" ".join(ln.split()) for ln in text.splitlines()]
+    out: list[str] = []
+    for ln in lines:
+        if ln or (out and out[-1]):
+            out.append(ln)
+    return "\n".join(out).strip()
+
+
 def review_text(html: str, *, images: bool = True) -> str:
     """Plain text of (sanitized) HTML with link targets (and inline images) made explicit."""
-    from monospace.core.mime import html_to_text
-
     tree = LexborHTMLParser(sanitize_html(html))
-    for a in tree.css("a[href]"):
-        a.insert_after(f" <{a.attributes.get('href')}>")
-    for img in tree.css("img"):
-        if images:
-            img.insert_after(f"[image {img.attributes.get('alt') or ''} ({img.attributes.get('src')})]")
     body = tree.body
-    return terminal_safe(html_to_text(body.inner_html if body else ""))
+    return terminal_safe(_tidy(_render(body, images=images, strict=False))) if body else ""
 
 
 def words(text: str) -> list[str]:
     return [w.lower() for w in re.findall(r"[^\W_]+", text)]
 
 
-def html_links(html: str) -> list[str]:
-    tree = LexborHTMLParser(sanitize_html(html))
-    return [normalize_url(a.attributes.get("href") or "") or "" for a in tree.css("a[href]")]
-
-
-def text_links(text: str) -> list[str]:
-    return [normalize_url(u) or "" for u in _TEXT_URL.findall(text)]
+def tokens(text: str) -> list[str]:
+    """Words, with each URL kept in place as one normalized token (never split into words)."""
+    out: list[str] = []
+    pos = 0
+    for m in _TEXT_URL.finditer(text):
+        out += words(text[pos:m.start()])
+        out.append("url:" + (normalize_url(m.group(0)) or "?"))
+        pos = m.end()
+    return out + words(text[pos:])
 
 
 def html_matches_text(html: str, text: str) -> bool:
-    """True when the HTML shows the text part's words in order AND links to exactly the URLs the
-    text part spells out, in order (normalized, compared whole — not as words)."""
-    from monospace.core.mime import html_to_text
-
+    """True when the HTML shows exactly the text part: same words in the same order, and every link
+    target at the same position as the URL the text spells out there."""
     tree = LexborHTMLParser(sanitize_html(html))
-    visible = html_to_text(tree.body.inner_html if tree.body else "")
-    # Visible words (URLs aside) must match in order; URLs are compared whole via the link lists.
-    return words(_TEXT_URL.sub(" ", visible)) == words(_TEXT_URL.sub(" ", text)) \
-        and html_links(html) == text_links(text)
+    if tree.body is None:
+        return not words(text)
+    try:
+        rendered = _render(tree.body, images=False, strict=True)
+    except _Mismatch:
+        return False
+    return tokens(rendered) == tokens(text)

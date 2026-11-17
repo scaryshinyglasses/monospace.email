@@ -229,3 +229,15 @@ def test_visible_url_in_html_still_matches():
     from monospace.core.sanitize import html_matches_text
 
     assert html_matches_text('<p>Go to <a href="https://a.io/x">https://a.io/x</a></p>', "Go to <https://a.io/x>")
+
+
+def test_links_compared_in_position_and_attributes_ignored():
+    from monospace.core.sanitize import html_matches_text, review_text
+
+    # link moved to a different spot in the text
+    assert not html_matches_text('<p><a href="https://a.io">pay</a> later</p>', "pay later [x](https://a.io)")
+    # visible URL text, different destination
+    assert not html_matches_text('<a href="https://evil.io">https://bank.io</a>', "<https://bank.io>")
+    # attribute content never counts as visible text
+    assert html_matches_text('<p align="x>secret">Hi</p>', "Hi")
+    assert "secret" not in review_text('<p align="x>secret">Hi</p><img src="cid:a" alt="logo">')
