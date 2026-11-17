@@ -72,22 +72,29 @@ class ImageView(Widget):
         for s in self.query(".placeholder"):
             s.update(_label(self.block, note))  # type: ignore[attr-defined]
 
-    def _columns(self, frame: PILImage.Image) -> int:
+    def _cells(self, frame: PILImage.Image) -> tuple[int, int]:
+        """(columns, rows) for the image. Both are explicit: textual_image ≥0.14 sizes an
+        ``auto`` height from the widget's width *before* the first layout (0), so a static
+        image ended up 0 rows tall and never appeared."""
         try:
-            cell_w = get_cell_size().width or 10
+            cell = get_cell_size()
+            cell_w, cell_h = (cell.width or 10), (cell.height or 20)
         except Exception:
-            cell_w = 10
-        px = self.block.width or frame.width
+            cell_w, cell_h = 10, 20
+        px_w = self.block.width or frame.width
+        px_h = (self.block.height if self.block.width and self.block.height else
+                round(px_w * frame.height / frame.width) if frame.width else frame.height)
         avail = max(10, (self.parent.size.width if self.parent else MAX_COLS) - 2)
-        return max(6, min(MAX_COLS, avail, math.ceil(px / cell_w)))
+        cols = max(6, min(MAX_COLS, avail, math.ceil(px_w / cell_w)))
+        rows = max(1, round(cols * cell_w * (px_h / px_w if px_w else 1) / cell_h))
+        return cols, rows
 
     def _show(self, anim: gif.Animation) -> None:
         self._anim = anim
         first = anim.frames[0]
         self.query(".placeholder").remove()
         self._img = TerminalImage(first)
-        self._img.styles.width = self._columns(first)
-        self._img.styles.height = "auto"
+        self._img.styles.width, self._img.styles.height = self._cells(first)
         if self.block.href:
             self._img.tooltip = self.block.href
         self.mount(self._img)

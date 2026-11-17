@@ -166,3 +166,31 @@ async def test_ctrl_v_pastes_system_clipboard(svc, monkeypatch):
         inp.focus()
         await pilot.press("ctrl+v")
         assert "from-system" in inp.value
+
+
+def _png_mail() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (300, 150), (20, 120, 200)).save(buf, format="PNG")
+    m = EmailMessage()
+    m["From"], m["To"], m["Subject"], m["Message-ID"] = "News <n@x>", "me@example.com", "Static", "<s@x>"
+    m["Date"] = "Wed, 18 Nov 2026 11:00:00 +0000"
+    m.set_content("plain")
+    m.add_alternative('<p>chart:</p><img src="cid:chart" alt="chart">', subtype="html")
+    m.get_payload()[1].add_related(buf.getvalue(), maintype="image", subtype="png", cid="<chart>")
+    return m.as_bytes()
+
+
+async def test_static_image_gets_real_height(svc, server):
+    """textual_image ≥0.14 computed `height: auto` as 0 rows for static images (only GIFs,
+    which re-layout every frame, ever showed up)."""
+    server.deliver("INBOX", _png_mail())
+    svc.sync()
+    app = MonospaceApp(svc, watch=False)
+    async with app.run_test(size=(140, 50)) as pilot:
+        await _open(pilot, app, "Static")
+        await app.workers.wait_for_complete()
+        await pilot.pause(0.2)
+        view = app.screen.query_one(ImageView)
+        assert view._img is not None
+        assert view._img.region.width >= 6
+        assert view._img.region.height >= 2  # 300×150 px → roughly half as tall as wide in pixels
