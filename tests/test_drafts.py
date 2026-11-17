@@ -200,3 +200,15 @@ def test_outbox_review_shows_sent_content_and_strips_escapes(svc):
                                  "[click](https://evil.example)"), "ai")
     text = svc.outbox_review(svc.store.outbox_get(res.outbox_id))
     assert "\x1b" not in text and "\x07" not in text and "<https://evil.example>" in text
+
+
+def test_sanitizer_is_stable_and_drops_comments_in_dom():
+    from monospace.core.sanitize import html_matches_text, sanitize_html
+
+    html = '<p>a<!--[if mso]>X<![endif]--><a href="https://a/<!--">b</a> c --></p><a href="https://ok.io/x y">s</a>'
+    out = sanitize_html(html)
+    assert "X" not in out and "<!--" not in out and "ok.io" not in out
+    assert sanitize_html(out) == out
+    # link target must be visible in the text part
+    assert not html_matches_text('<a href="https://evil.example">invoice</a>', "invoice")
+    assert html_matches_text('<a href="https://ok.example">docs</a>', "[docs](https://ok.example)")

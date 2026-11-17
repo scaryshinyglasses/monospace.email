@@ -21,7 +21,7 @@ KEEP = {"p", "br", "hr", "div", "span", "b", "strong", "i", "em", "u", "s", "del
         "caption", "html", "body"}
 ATTRS = {"a": {"href"}, "img": {"src", "alt", "width", "height"}, "td": {"colspan", "rowspan", "align"},
          "th": {"colspan", "rowspan", "align"}, "p": {"align"}, "div": {"align"}}
-_SAFE_HREF = re.compile(r"^(https?://|mailto:)", re.I)
+_SAFE_HREF = re.compile(r"^(https?://|mailto:)[^\s<>\"'`\\]+$", re.I)
 _CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f​-‏‪-‮⁦-⁩]")
 
 
@@ -31,16 +31,37 @@ def terminal_safe(text: str) -> str:
 
 
 def sanitize_html(html: str) -> str:
+    """Allowlist-sanitize, repeated until stable so re-parsing can't resurrect anything."""
+    out = _sanitize_once(html)
+    for _ in range(3):
+        again = _sanitize_once(out)
+        if again == out:
+            return out
+        out = again
+    return _text_only(out)  # never converged: fall back to escaped plain text
+
+
+def _text_only(html: str) -> str:
+    import html as htmllib
+
+    from monospace.core.mime import html_to_text
+
+    return "<pre>" + htmllib.escape(html_to_text(html)) + "</pre>"
+
+
+def _sanitize_once(html: str) -> str:
     tree = LexborHTMLParser(html)
     for node in tree.css(DROP):
         node.decompose()
     body = tree.body
     if body is None:
         return ""
-    for node in list(body.traverse(include_text=False)):
-        tag = (node.tag or "").lower()
-        if tag.startswith("-") or node.is_comment_node:
+    for node in list(body.traverse(include_text=True)):
+        if node.is_comment_node:  # Outlook renders <!--[if mso]> blocks: unreviewable content
             node.decompose()
+            continue
+        tag = (node.tag or "").lower()
+        if tag.startswith("-"):  # text nodes
             continue
         if tag not in KEEP:
             node.unwrap()  # keep the text, lose the element (font, center, details, …)
@@ -56,19 +77,19 @@ def sanitize_html(html: str) -> str:
                 del node.attrs[name]
         if tag == "img" and not (node.attributes.get("src") or "").startswith("cid:"):
             node.decompose()  # remote / data: images can carry data out or show unreviewed text
-    # Comments: Outlook renders <!--[if mso]> blocks, so anything in a comment is unreviewed content.
-    return re.sub(r"<!--.*?-->", "", body.inner_html or "", flags=re.S)
+    return body.inner_html or ""
 
 
-def review_text(html: str) -> str:
-    """Plain text of (sanitized) HTML with link targets and inline images made explicit."""
+def review_text(html: str, *, images: bool = True) -> str:
+    """Plain text of (sanitized) HTML with link targets (and inline images) made explicit."""
     from monospace.core.mime import html_to_text
 
     tree = LexborHTMLParser(sanitize_html(html))
     for a in tree.css("a[href]"):
         a.insert_after(f" <{a.attributes.get('href')}>")
     for img in tree.css("img"):
-        img.insert_after(f"[image {img.attributes.get('alt') or ''} ({img.attributes.get('src')})]")
+        if images:
+            img.insert_after(f"[image {img.attributes.get('alt') or ''} ({img.attributes.get('src')})]")
     body = tree.body
     return terminal_safe(html_to_text(body.inner_html if body else ""))
 
@@ -78,9 +99,6 @@ def words(text: str) -> list[str]:
 
 
 def html_matches_text(html: str, text: str) -> bool:
-    """True when the HTML shows exactly the text part's words, in order (formatting aside)."""
-    from monospace.core.mime import html_to_text
-
-    tree = LexborHTMLParser(sanitize_html(html))
-    body = tree.body
-    return words(html_to_text(body.inner_html if body else "")) == words(text)
+    """True when the HTML shows exactly the text part's words in order — link targets included, so a
+    link reading "invoice" can't quietly point somewhere the text part doesn't mention."""
+    return words(review_text(html, images=False)) == words(text)
