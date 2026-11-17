@@ -11,6 +11,8 @@
 ![MCP](https://img.shields.io/badge/MCP-server-8A2BE2)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+**[Website ↗](https://monospace.arp244.dev)**
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | sh
 ```
