@@ -174,6 +174,12 @@ class Store:
                                   (account, folder, uid)).fetchone()
         return _env(row) if row else None
 
+    def by_message_id(self, account: str, folder: str, message_id: str) -> Envelope | None:
+        with self.lock:
+            row = self.db.execute(f"SELECT {_ENV_COLS} FROM messages WHERE account=? AND folder=?"
+                                  " AND message_id=? ORDER BY uid DESC", (account, folder, message_id)).fetchone()
+        return _env(row) if row else None
+
     def uids(self, account: str, folder: str) -> dict[int, int]:
         """uid -> id for a folder."""
         with self.lock:

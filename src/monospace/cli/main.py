@@ -8,12 +8,13 @@ import sys
 from monospace import __version__
 from monospace.cli import accounts as cli_accounts
 from monospace.cli import mail as cli_mail
+from monospace.cli import manage as cli_manage
 from monospace.cli import mcp_setup as cli_mcp_setup
 from monospace.cli import outbox as cli_outbox
 from monospace.cli import update as cli_update
 from monospace.cli.output import info
 
-MAIL_CMDS = ("sync", "ls", "folders", "read", "search", "send", "draft", "reply", "mark", "move", "attachment")
+MAIL_CMDS = ("sync", "ls", "read", "search", "send", "draft", "reply", "mark", "move", "attachment")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -25,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--no-images", action="store_true", help="show image placeholders instead of pixels")
     cli_accounts.add_parsers(sub)
     cli_mail.add_parsers(sub)
+    cli_manage.add_parsers(sub)
     cli_outbox.add_parsers(sub)
     cli_update.add_parsers(sub)
     d = sub.add_parser("doctor", help="check config, secrets, terminal graphics and connectivity")
@@ -93,6 +95,8 @@ def _dispatch(cmd: str, args: argparse.Namespace) -> int:
     svc = Service(cfg)
     if cmd in MAIL_CMDS:
         return cli_mail.run(cmd, args, svc)
+    if cmd in cli_manage.COMMANDS:
+        return cli_manage.run(cmd, args, svc)
     if cmd == "outbox":
         return cli_outbox.run(args, svc)
     if cmd == "daemon":

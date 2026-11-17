@@ -24,9 +24,11 @@ Textual SVG screenshots of a FakeServer demo mailbox.
 
 ```
 src/monospace/
-  cli/          main.py (argparse dispatch, TUI default) · mail.py · accounts.py (+ `oauth`)
+  cli/          main.py (argparse dispatch, TUI default) · mail.py (send/draft/reply: --attach ≠ --inline, --html)
+                manage.py (forward · drafts ls|show|edit|send|rm · folders create|rename|rm) · accounts.py (+ `oauth`)
                 outbox.py · doctor.py · update.py · mcp_setup.py (`mcp install claude|codex`) · daemon.py (systemd/launchd) · output.py (json, interactive())
   mcp_server.py MCPServer (mcp 2.x — FastMCP was renamed) tools wrapping core.service
+  mcp_drafts.py draft edit/send/delete, folder ops, outbox_cancel, InlineImage model, apply_extras
   core/         ← NO UI IMPORTS (tests/test_purity.py enforces; also ≤350 lines/file)
     paths.py        XDG dirs; MONOSPACE_HOME relocates everything
     config.py       Account/OAuthClients/Settings, PRESETS (gmail/outlook/custom), hand-written TOML dump
@@ -42,12 +44,18 @@ src/monospace/
     store.py        SQLite: folders, messages, bodies, FTS5 `search`, outbox
     sync.py         incremental per-folder sync (UIDVALIDITY, last UID, flag refresh, body prefetch)
     watch.py        per-account IDLE/poll threads → callback
-    mime.py/compose.py  parse → ParsedMessage; Draft → EmailMessage (markdown → plain+html), reply/forward
+    mime.py/compose.py  parse → ParsedMessage; Draft → EmailMessage (markdown or html_body → plain+html), reply/forward
+                    inline images = multipart/related parts (cid `<name>@monospace.email`, `inline_layout`
+                    places unreferenced ones top/bottom); attachments = multipart/mixed parts
+    drafts.py       DraftsMixin: get/update/delete/send drafts (Drafts folder only). Edit = APPEND new
+                    (same Message-ID) + expunge old; existing parts materialized to data/draft-files/
+    folders.py      FoldersMixin: create/rename/delete (delete: empty, non-system only)
     policy.py       ai_send: draft | confirm(queue) | allow — applies to source="ai" only
     service.py      THE façade (blocking). TUI, CLI and MCP all go through it.
   render/       html_blocks (selectolax lexbor → Text/Image blocks) · images (cid/data/remote opt-in) · gif
   ui/           app.py (MonospaceApp; imports image_view FIRST — textual_image probes the terminal at import)
-                screens/ main · compose · account_add · outbox     widgets/ folder_tree · message_list · reader
+                screens/ main (e edit draft · N/E/X folders) · compose (attachments + inline images; edits a
+                stored draft via draft_id → replace_draft) · prompt · account_add · outbox     widgets/ folder_tree · message_list · reader
                 · image_view (GIF animation via set_timer) · attachment_bar     glyphs.py (ASCII fallback)
 ```
 
@@ -56,7 +64,9 @@ src/monospace/
 - **AI safety:** sends from MCP / non-interactive CLI use `source="ai"` → `policy.decide`. Never add an MCP
   tool that approves the outbox or changes `ai_send`; CLI `outbox approve` and `account set ai_send=` refuse
   non-interactive callers. Human TUI sends call `send_now` directly.
-- Agent attachments: `policy.check_agent_attachments` confines `source="ai"` attachments to
+- `submit`/`save_draft(trusted=True)` skips the agent-file guard: use it only for parts *we* materialized
+  (a stored draft, a forwarded original), after guarding any agent-supplied files.
+- Agent attachments: `policy.check_agent_attachments` confines `source="ai"` attachments (and inline images) to
   `agent_attachment_dir` (resolve + is_relative_to, symlinks rejected); queued outbox items snapshot files into
   `data/outbox-files/`. UI only auto-opens passive types (`platform.safe_to_open`) and http(s) links (`safe_url`).
 - Message `id` = SQLite rowid (stable handle for CLI/MCP); IMAP UIDs stay internal.

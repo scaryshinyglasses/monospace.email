@@ -125,6 +125,10 @@ monospace update     # installs the latest version (the app tells you when one e
 | `i` | load remote images | `H` | HTML ↔ plain text |
 | `Ctrl+R` · `g` | sync now | `O` | AI outbox |
 | `A` | add account | `q` | quit |
+| `e` | edit the selected draft | `N` · `E` · `X` | new · rename · delete folder |
+
+In the composer, **Attachments** are files the recipient downloads and **Inline images** show in the body.
+Write an inline image as `logo.png;width=120;position=top`, or place it yourself with `![Logo](logo.png)`.
 
 In compose, `Ctrl+S` sends and `Ctrl+D` saves a draft.
 
@@ -181,7 +185,16 @@ Then ask: *"Summarise my unread mail and draft replies to anything from Priya."*
 ```
 
 **Tools:** `list_accounts` `sync` `list_folders` `list_messages` `search` `read_message`
-`save_attachment` `send_email` `create_draft` `reply` `forward` `mark` `move` `outbox_list`
+`save_attachment` `send_email` `create_draft` `reply` `forward` `mark` `move` `outbox_list` `outbox_cancel`
+· drafts: `get_draft` `update_draft` `send_draft` `delete_draft`
+· folders: `create_folder` `rename_folder` `delete_folder` (empty, non-system only)
+
+Compose tools take `cc`/`bcc`, a markdown `body` or a raw `html_body`, and two kinds of file:
+**`attachments`** (downloadable files) and **`inline_images`** (shown inside the body, e.g. a logo).
+An inline image is a path or `{path, alt, width, height, position: top|bottom, align, link}`. To place it
+yourself, reference it as `![Logo](logo.png)` or `<img src="cid:logo.png">`. `update_draft` edits a saved
+draft in place and keeps its existing attachments and images unless you remove them. `forward` can carry
+the original's attachments.
 
 **Guardrails built into the code, not into a prompt:**
 - There's **no** tool to approve the outbox or change the policy. Those commands refuse to run without an interactive terminal.
@@ -196,7 +209,13 @@ monospace ls --unread --json
 monospace read 42 --json
 monospace search "invoice march"
 echo "Sounds good — see you then." | monospace reply 42
-monospace send --to bob@example.com --subject Hi --body "**Hello**" --attach ~/notes.pdf
+monospace send --to bob@example.com --subject Hi --body "**Hello**" --attach ~/notes.pdf \
+               --inline "logo.png;width=120;position=top"     # --html page.html to send your own HTML
+monospace drafts ls                    # then: drafts show 12 · drafts edit 12 --subject … --inline logo.png
+monospace drafts edit 12 --editor      # body in $EDITOR;  --detach / --remove-inline NAME drop parts
+monospace drafts send 12               # · drafts rm 12
+monospace forward 42 --to ana@example.com      # carries the attachments (--no-attachments to skip)
+monospace folders create Receipts      # · folders rename A B · folders rm A (empty only)
 monospace outbox list            # then: monospace outbox approve 7   (humans only)
 ```
 

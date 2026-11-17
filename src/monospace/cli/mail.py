@@ -1,4 +1,6 @@
-"""Mail commands: sync, ls, read, search, send, draft, reply, mark, move, attachment."""
+"""Mail commands: sync, ls, read, search, send, draft, reply, mark, move, attachment.
+
+Drafts management, forward and folder ops live in ``cli/manage.py``."""
 
 from __future__ import annotations
 
@@ -23,9 +25,6 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--sync", action="store_true", help="sync this folder first")
     p.add_argument("--json", action="store_true")
 
-    p = sub.add_parser("folders", help="list folders")
-    p.add_argument("--json", action="store_true")
-
     p = sub.add_parser("read", help="print a message")
     p.add_argument("id", type=int)
     p.add_argument("--mark-read", action="store_true")
@@ -44,7 +43,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         p.add_argument("--bcc", action="append", default=[])
         p.add_argument("--subject", default="")
         p.add_argument("--body", help="markdown body; omit to read stdin")
-        p.add_argument("--attach", action="append", default=[])
+        add_content_args(p)
         p.add_argument("--yes", "-y", action="store_true", help="skip the confirmation prompt")
         p.add_argument("--json", action="store_true")
 
@@ -52,6 +51,10 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     p.add_argument("id", type=int)
     p.add_argument("--body", help="markdown body; omit to read stdin")
     p.add_argument("--all", action="store_true")
+    p.add_argument("--cc", action="append", default=[], help="extra Cc")
+    p.add_argument("--bcc", action="append", default=[])
+    add_content_args(p)
+    p.add_argument("--draft", action="store_true", help="save to Drafts instead of sending")
     p.add_argument("--yes", "-y", action="store_true")
     p.add_argument("--json", action="store_true")
 
@@ -74,9 +77,45 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--dir")
 
 
-def _body(arg: str | None) -> str:
+def add_content_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--attach", action="append", default=[], metavar="FILE",
+                   help="attach a file (the recipient downloads it)")
+    p.add_argument("--inline", action="append", default=[], metavar="IMAGE[;opt=val…]",
+                   help="embed an image IN the body, e.g. 'logo.png;width=120;position=top' "
+                        "(options: alt width height position=top|bottom align=left|center|right link). "
+                        "Place it yourself with ![Logo](logo.png) in the body.")
+    p.add_argument("--html", metavar="FILE", help="send this HTML (file, or - for stdin) as the HTML part")
+
+
+def read_html(arg: str | None) -> str | None:
+    if not arg:
+        return None
+    if arg == "-":
+        return sys.stdin.read()
+    from pathlib import Path
+
+    return Path(arg).expanduser().read_text()
+
+
+def apply_content(draft: Draft, args: argparse.Namespace) -> Draft:
+    """--attach / --inline / --html onto a draft (inline images get their layout options)."""
+    from monospace.core import compose
+
+    draft.attachments = draft.attachments + list(getattr(args, "attach", []) or [])
+    for raw in getattr(args, "inline", []) or []:
+        spec = compose.parse_inline_arg(raw)
+        compose.add_inline(draft, str(spec.pop("path")), spec)
+    html = read_html(getattr(args, "html", None))
+    if html:
+        draft.html_body = html
+    return draft
+
+
+def _body(arg: str | None, *, allow_empty: bool = False) -> str:
     if arg is not None:
         return arg
+    if allow_empty:
+        return ""
     if sys.stdin.isatty():
         info("Enter the body (markdown), finish with Ctrl-D:")
     return sys.stdin.read()
@@ -91,7 +130,9 @@ def _print_message(svc: Service, msg_id: int, args: argparse.Namespace) -> None:
         emit_json({**env.to_dict(), "to": pm.to, "cc": pm.cc, "text": pm.best_text(),
                    "has_html": bool(pm.html),
                    "attachments": [{"index": i, "filename": a.filename, "content_type": a.content_type,
-                                    "size": a.size} for i, a in enumerate(pm.attachments)]})
+                                    "size": a.size} for i, a in enumerate(pm.attachments)],
+                   "inline_images": [{"cid": cid, "filename": p.filename, "content_type": p.content_type,
+                                      "size": p.size} for cid, p in pm.inline.items()]})
         return
     print(f"From:    {pm.from_}\nTo:      {', '.join(pm.to)}")
     if pm.cc:
@@ -100,9 +141,11 @@ def _print_message(svc: Service, msg_id: int, args: argparse.Namespace) -> None:
     print(pm.best_text())
     for i, a in enumerate(pm.attachments):
         print(f"\n[{i}] 📎 {a.filename} ({a.content_type}, {a.size:,} bytes)")
+    for cid, p in pm.inline.items():
+        print(f"    🖼  inline {p.filename} ({p.content_type}, {p.size:,} bytes, cid {cid})")
 
 
-def _submit(svc: Service, args: argparse.Namespace, draft: Draft, *, as_draft: bool) -> None:
+def submit(svc: Service, args: argparse.Namespace, draft: Draft, *, as_draft: bool) -> None:
     human = interactive()
     if as_draft:
         res = svc.save_draft(args.account, draft, "human" if human else "ai")
@@ -129,13 +172,6 @@ def run(cmd: str, args: argparse.Namespace, svc: Service) -> int:
             svc.sync(args.account, [args.folder])
         envs = svc.list(args.account, args.folder, limit=args.limit, unread_only=args.unread)
         emit_json([e.to_dict() for e in envs]) if args.json else envelope_rows(envs)
-    elif cmd == "folders":
-        folders = svc.folders(args.account)
-        if args.json:
-            emit_json(folders)
-        else:
-            for f in folders:
-                print(f"{f['name']:40} {f['unread']:>5} unread / {f['total']:>6}")
     elif cmd == "read":
         _print_message(svc, args.id, args)
     elif cmd == "search":
@@ -143,15 +179,18 @@ def run(cmd: str, args: argparse.Namespace, svc: Service) -> int:
         emit_json([e.to_dict() for e in envs]) if args.json else envelope_rows(envs)
     elif cmd in ("send", "draft"):
         draft = Draft(to=split_addrs(args.to), cc=split_addrs(args.cc), bcc=split_addrs(args.bcc),
-                      subject=args.subject, body=_body(args.body), attachments=args.attach)
-        _submit(svc, args, draft, as_draft=cmd == "draft")
+                      subject=args.subject, body=_body(args.body, allow_empty=bool(args.html)))
+        submit(svc, args, apply_content(draft, args), as_draft=cmd == "draft")
     elif cmd == "reply":
         env, pm = svc.read(args.id)
         from monospace.core import compose
 
-        draft = compose.reply(pm, _body(args.body), svc.account(env.account).email, reply_all=args.all)
+        draft = compose.reply(pm, _body(args.body, allow_empty=bool(args.html)), svc.account(env.account).email,
+                              reply_all=args.all)
+        draft.cc += split_addrs(args.cc)
+        draft.bcc += split_addrs(args.bcc)
         args.account = env.account
-        _submit(svc, args, draft, as_draft=False)
+        submit(svc, args, apply_content(draft, args), as_draft=args.draft)
     elif cmd == "mark":
         e = svc.mark(args.id, read=args.read, flagged=args.flagged)
         info(f"{e.id}: {'unread' if e.unread else 'read'}{', flagged' if e.flagged else ''}")

@@ -33,6 +33,7 @@ class ParsedMessage:
     from_: str = ""
     to: list[str] = field(default_factory=list)
     cc: list[str] = field(default_factory=list)
+    bcc: list[str] = field(default_factory=list)  # only present on drafts / sent copies
     reply_to: list[str] = field(default_factory=list)
     date: str = ""
     message_id: str = ""
@@ -76,6 +77,7 @@ def parse(raw: bytes) -> ParsedMessage:
         from_=(_addrs(msg.get_all("from")) or [""])[0],
         to=_addrs(msg.get_all("to")),
         cc=_addrs(msg.get_all("cc")),
+        bcc=_addrs(msg.get_all("bcc")),
         reply_to=_addrs(msg.get_all("reply-to")),
         date=_iso_date(msg.get("date")),
         message_id=str(msg.get("message-id", "") or "").strip(),

@@ -13,6 +13,8 @@ from monospace.core import sync as syncmod
 from monospace.core.auth import tokens
 from monospace.core.compose import Draft
 from monospace.core.config import Account, Config
+from monospace.core.drafts import DraftsMixin
+from monospace.core.folders import FoldersMixin
 from monospace.core.imap import ImapSession
 from monospace.core.store import Envelope, Store
 
@@ -30,17 +32,18 @@ class SendResult:
     account: str
     detail: str = ""
     outbox_id: int | None = None
+    draft_id: int | None = None  # local id of the saved draft (status "drafted")
 
     def to_dict(self) -> dict:
         return {"status": self.status, "account": self.account, "detail": self.detail,
-                "outbox_id": self.outbox_id}
+                "outbox_id": self.outbox_id, "draft_id": self.draft_id}
 
 
 def _default_sender(acct: Account, cred: tokens.Credential | None, msg: EmailMessage, rcpts: list[str]) -> None:
     asyncio.run(smtp.send(acct, cred, msg, rcpts))
 
 
-class Service:
+class Service(DraftsMixin, FoldersMixin):
     def __init__(self, cfg: Config | None = None, store: Store | None = None, *,
                  session_factory: SessionFactory = ImapSession, sender: Sender = _default_sender,
                  credentials: Callable[[Account], tokens.Credential] | None = None) -> None:
@@ -186,37 +189,45 @@ class Service:
     def _build(self, acct: Account, draft: Draft, *, for_draft: bool = False) -> EmailMessage:
         try:
             msg = compose.build(draft, acct.from_header, signature=acct.signature)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             raise ServiceError(f"attachment error: {exc}") from exc
         if for_draft and draft.bcc:
             msg["Bcc"] = ", ".join(draft.bcc)
         return msg
 
     def _guard_ai(self, draft: Draft) -> None:
-        if draft.attachments:
+        if draft.attachments or draft.inline_images:
             allowed = policy.agent_attachment_dir(self.cfg.settings.agent_attachment_dir)
             draft.attachments = policy.check_agent_attachments(draft.attachments, allowed)
+            draft.inline_images = dict(zip(draft.inline_images, policy.check_agent_attachments(
+                list(draft.inline_images.values()), allowed)))
 
     def _snapshot(self, draft: Draft) -> None:
         """Copy queued attachments so the approved message is exactly what was reviewed."""
-        if not draft.attachments:
+        if not draft.attachments and not draft.inline_images:
             return
         import shutil
         import uuid
 
         target = paths.data_dir() / "outbox-files" / uuid.uuid4().hex
         target.mkdir(parents=True)
-        draft.attachments = [str(shutil.copy2(src, target / Path(src).name)) for src in draft.attachments]
 
-    def save_draft(self, account: str | None, draft: Draft, source: policy.Source = "human") -> SendResult:
+        def copy(src: str) -> str:
+            return str(shutil.copy2(src, platform.unique_path(target, Path(src).name)))
+
+        draft.attachments = [copy(src) for src in draft.attachments]
+        draft.inline_images = {cid: copy(src) for cid, src in draft.inline_images.items()}
+
+    def save_draft(self, account: str | None, draft: Draft, source: policy.Source = "human", *,
+                   trusted: bool = False) -> SendResult:
         acct = self.account(account)
-        if source == "ai":
+        if source == "ai" and not trusted:
             self._guard_ai(draft)
         msg = self._build(acct, draft, for_draft=True)
         folder = acct.folder("drafts")
         with self.session(acct) as sess:
             sess.append(folder, msg.as_bytes(), ["\\Draft", "\\Seen"])
-        return SendResult("drafted", acct.name, f"saved to {folder}")
+        return self._drafted(acct, msg["Message-ID"], f"saved to {folder}")
 
     def send_now(self, account: str | None, draft: Draft) -> SendResult:
         acct = self.account(account)
@@ -233,17 +244,19 @@ class Service:
                 pass
         return SendResult("sent", acct.name, f"sent to {', '.join(rcpts)}")
 
-    def submit(self, account: str | None, draft: Draft, source: policy.Source) -> SendResult:
+    def submit(self, account: str | None, draft: Draft, source: policy.Source, *,
+               trusted: bool = False) -> SendResult:
+        """``trusted`` = attachments were materialized by us (e.g. from a stored draft), not named by an agent."""
         acct = self.account(account)
         if not draft.recipients():
             raise ServiceError("no recipients")
-        if source == "ai":
+        if source == "ai" and not trusted:
             self._guard_ai(draft)
         action = policy.decide(acct.ai_send, source)
         if action == "send":
             return self.send_now(acct.name, draft)
         if action == "draft":
-            res = self.save_draft(acct.name, draft)  # already guarded above
+            res = self.save_draft(acct.name, draft, trusted=True)  # already guarded above
             res.detail += f" (account policy ai_send=draft; a human must send it)"
             return res
         self._snapshot(draft)
@@ -252,15 +265,28 @@ class Service:
                           f"awaiting approval: `monospace outbox approve {item}` or the TUI outbox (O)", item)
 
     def reply(self, msg_id: int, body: str, *, reply_all: bool = False, source: policy.Source = "human",
-              send: bool = True) -> SendResult:
+              send: bool = True, extras: Callable[[Draft], Draft] | None = None) -> SendResult:
         env, pm = self.read(msg_id)
         acct = self.account(env.account)
         draft = compose.reply(pm, body, acct.email, reply_all=reply_all)
+        if extras:
+            draft = extras(draft)
         return self.submit(acct.name, draft, source) if send else self.save_draft(acct.name, draft, source)
 
-    def forward(self, msg_id: int, body: str, to: list[str], *, source: policy.Source = "human") -> SendResult:
+    def forward(self, msg_id: int, body: str, to: list[str], *, source: policy.Source = "human",
+                send: bool = True, extras: Callable[[Draft], Draft] | None = None,
+                include_attachments: bool = False) -> SendResult:
         env, pm = self.read(msg_id)
-        return self.submit(env.account, compose.forward(pm, body, to), source)
+        draft = compose.forward(pm, body, to)
+        if extras:
+            draft = extras(draft)
+        if source == "ai":  # guard the agent's own files before adding the original's parts
+            self._guard_ai(draft)
+        if include_attachments and pm.attachments:
+            draft.attachments += self.materialize(pm.attachments)
+        if send:
+            return self.submit(env.account, draft, source, trusted=True)
+        return self.save_draft(env.account, draft, source, trusted=True)
 
     # ---- outbox --------------------------------------------------------
     def outbox(self) -> list[dict]:
@@ -282,6 +308,13 @@ class Service:
             raise
         self.store.outbox_set(item_id, "sent")
         return res
+
+    def outbox_cancel(self, item_id: int) -> None:
+        """Withdraw a pending item (AI callers may do this — it never sends anything)."""
+        item = self.store.outbox_get(item_id)
+        if not item or item["status"] != "pending":
+            raise ServiceError(f"no pending outbox item {item_id}")
+        self.store.outbox_set(item_id, "cancelled")
 
     def outbox_reject(self, item_id: int) -> None:
         if not self.store.outbox_get(item_id):

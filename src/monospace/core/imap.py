@@ -184,6 +184,20 @@ class ImapSession:
     def append(self, folder: str, raw: bytes, flags: list[str]) -> None:
         self.c.append(folder, raw, flags=[f.encode() for f in flags])
 
+    def delete(self, uids: list[int]) -> None:
+        """Permanently remove messages from the selected folder."""
+        self.c.delete_messages(uids)
+        self.c.uid_expunge(uids) if self.c.has_capability("UIDPLUS") else self.c.expunge()
+
+    def create_folder(self, name: str) -> None:
+        self.c.create_folder(name)
+
+    def rename_folder(self, old: str, new: str) -> None:
+        self.c.rename_folder(old, new)
+
+    def delete_folder(self, name: str) -> None:
+        self.c.delete_folder(name)
+
     # ---- IDLE ----------------------------------------------------------
     def supports_idle(self) -> bool:
         return self.c.has_capability("IDLE")

@@ -94,6 +94,19 @@ class FakeSession:
     def append(self, folder: str, raw: bytes, flags: list[str]) -> None:
         self.server.deliver(folder, raw, flags)
 
+    def delete(self, uids: list[int]) -> None:
+        for u in uids:
+            self._f()["msgs"].pop(u, None)
+
+    def create_folder(self, name: str) -> None:
+        self.server.folders.setdefault(name, {"next": 1, "msgs": {}})
+
+    def rename_folder(self, old: str, new: str) -> None:
+        self.server.folders[new] = self.server.folders.pop(old)
+
+    def delete_folder(self, name: str) -> None:
+        del self.server.folders[name]
+
 
 def parse(raw: bytes) -> EmailMessage:
     return email.message_from_bytes(raw, policy=email.policy.default)  # type: ignore[return-value]

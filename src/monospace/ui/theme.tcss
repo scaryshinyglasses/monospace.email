@@ -62,7 +62,8 @@ AttachmentBar Button { margin-right: 1; min-width: 10; }
 .form .error { color: $error; margin-top: 1; }
 .form .url { background: $panel; padding: 0 1; margin-top: 1; }
 
-ComposeScreen, AccountAddScreen, OutboxScreen, ConfirmScreen { align: center middle; }
+ComposeScreen, AccountAddScreen, OutboxScreen, ConfirmScreen, PromptScreen { align: center middle; }
+PromptScreen .form { width: 64; height: auto; }
 ComposeScreen .form { width: 110; height: 90%; }
 ComposeScreen TextArea { height: 1fr; min-height: 8; margin-top: 1; }
 OutboxScreen .form { width: 110; height: 80%; }

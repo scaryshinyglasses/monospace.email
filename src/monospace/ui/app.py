@@ -123,13 +123,24 @@ class MonospaceApp(App):
             self.copy_to_clipboard(href)
             self.notify(f"Link copied to clipboard:\n{href[:200]}", timeout=8)
 
-    def open_compose(self, draft: Draft, account: str | None) -> None:
+    def open_compose(self, draft: Draft, account: str | None, draft_id: int | None = None) -> None:
         if not self.svc.cfg.accounts:
             self.notify("Add an account first (A)", severity="warning")
             return
         acct = self.svc.account(account)
         choices = [(a.name, a.email) for a in self.svc.cfg.accounts]
-        self.push_screen(ComposeScreen(draft, acct.name, choices), self._compose_done)
+        self.push_screen(ComposeScreen(draft, acct.name, choices, draft_id), self._compose_done)
+
+    @work(thread=True, group="open-draft")
+    def edit_draft(self, msg_id: int) -> None:
+        """Open a stored draft in the composer; attachments/inline images come along as files."""
+        try:
+            draft, _pm = self.svc.load_draft(msg_id)
+            account = self.svc.envelope(msg_id).account
+        except Exception as exc:
+            self.call_from_thread(self.notify, f"Can't edit: {exc}", severity="warning")
+            return
+        self.call_from_thread(self.open_compose, draft, account, msg_id)
 
     def _compose_done(self, result: ComposeResultData | None) -> None:
         if result:
@@ -138,16 +149,24 @@ class MonospaceApp(App):
     @work(thread=True, group="send")
     def deliver(self, result: ComposeResultData) -> None:
         try:
-            if result.action == "draft":
+            if result.action == "draft" and result.draft_id:
+                res = self.svc.replace_draft(result.draft_id, result.draft)
+            elif result.action == "draft":
                 res = self.svc.save_draft(result.account, result.draft)
             else:
+                if result.draft_id:
+                    result.draft.message_id = ""  # the sent copy gets its own Message-ID
                 res = self.svc.send_now(result.account, result.draft)  # a human pressed Send
+                if result.draft_id:
+                    self.svc.delete_draft(result.draft_id)
             self.call_from_thread(self.notify, f"✓ {res.status}: {res.detail}")
+            self.call_from_thread(self._refresh_main)
         except Exception as exc:
             self.call_from_thread(self.notify, f"Send failed: {exc}", severity="error", timeout=10)
             self.call_from_thread(self.push_screen,
                                   ComposeScreen(result.draft, result.account,
-                                                [(a.name, a.email) for a in self.svc.cfg.accounts]),
+                                                [(a.name, a.email) for a in self.svc.cfg.accounts],
+                                                result.draft_id),
                                   self._compose_done)
 
     @work(thread=True, group="attachment")

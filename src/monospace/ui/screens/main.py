@@ -12,6 +12,7 @@ from textual.widgets import DataTable, Footer, Header, Input
 
 from monospace.core import compose
 from monospace.core.compose import Draft
+from monospace.ui.screens.prompt import PromptScreen
 from monospace.ui.widgets.attachment_bar import AttachmentBar
 from monospace.ui.widgets.folder_tree import FolderTree
 from monospace.ui.widgets.message_list import MessageList
@@ -24,6 +25,10 @@ class MainScreen(Screen):
         Binding("r", "reply(False)", "Reply"),
         Binding("R", "reply(True)", "Reply all", show=False),
         Binding("f", "forward", "Forward", show=False),
+        Binding("e", "edit_draft", "Edit draft", show=False),
+        Binding("N", "new_folder", "New folder", show=False),
+        Binding("E", "rename_folder", "Rename folder", show=False),
+        Binding("X", "delete_folder", "Delete folder", show=False),
         Binding("a", "archive", "Archive"),
         Binding("d,delete,number_sign", "trash", "Delete"),
         Binding("u", "toggle_read", "Unread", show=False),
@@ -185,6 +190,51 @@ class MainScreen(Screen):
         if not (reader.envelope and reader.parsed):
             return self.notify("Open a message first")
         self.app.open_compose(compose.forward(reader.parsed, "", []), reader.envelope.account)  # type: ignore
+
+    def action_edit_draft(self) -> None:
+        msg_id = self._current()
+        if msg_id is None:
+            return self.notify("Select a draft first (Drafts folder)")
+        self.app.edit_draft(msg_id)  # type: ignore[attr-defined]
+
+    # ---- folders -------------------------------------------------------
+    def action_new_folder(self) -> None:
+        if not self.account:
+            return
+        self.app.push_screen(PromptScreen(f"New folder in [b]{self.account}[/b]:", "", "Create"),
+                             lambda name: name and self._folder_op("create", name))
+
+    def action_rename_folder(self) -> None:
+        if not self.account:
+            return
+        old = self.folder
+        self.app.push_screen(PromptScreen(f"Rename [b]{old}[/b] to:", old, "Rename"),
+                             lambda new: new and new != old and self._folder_op("rename", old, new))
+
+    def action_delete_folder(self) -> None:
+        if not self.account:
+            return
+        name = self.folder
+        self.app.push_screen(PromptScreen(f"Delete folder [b]{name}[/b]? It must be empty.", None, "Delete"),
+                             lambda ok: ok and self._folder_op("delete", name))
+
+    @work(thread=True, group="folders")
+    def _folder_op(self, op: str, *names: str) -> None:
+        try:
+            if op == "create":
+                self.svc.create_folder(self.account, names[0])
+            elif op == "rename":
+                self.svc.rename_folder(self.account, *names)
+                if self.folder == names[0]:
+                    self.folder = names[1]
+            else:
+                self.svc.delete_folder(self.account, names[0])
+                if self.folder == names[0]:
+                    self.folder = "INBOX"
+            self.app.call_from_thread(self.notify, f"Folder {op}d: {names[-1]}")
+        except Exception as exc:
+            self.app.call_from_thread(self.notify, str(exc), severity="error")
+        self.app.call_from_thread(self.refresh_from_cache)
 
     def action_archive(self) -> None:
         self._mutate("archive")
