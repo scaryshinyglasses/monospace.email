@@ -8,6 +8,7 @@ import sys
 from monospace import __version__
 from monospace.cli import accounts as cli_accounts
 from monospace.cli import mail as cli_mail
+from monospace.cli import mcp_setup as cli_mcp_setup
 from monospace.cli import outbox as cli_outbox
 from monospace.cli import update as cli_update
 from monospace.cli.output import info
@@ -29,7 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     d = sub.add_parser("doctor", help="check config, secrets, terminal graphics and connectivity")
     d.add_argument("--json", action="store_true")
     d.add_argument("--offline", action="store_true")
-    sub.add_parser("mcp", help="run the MCP server on stdio (for Claude and other AI clients)")
+    mcp = sub.add_parser("mcp", help="run the MCP server on stdio (Claude Code, Codex, other AI clients)")
+    cli_mcp_setup.add_parsers(mcp)
     dm = sub.add_parser("daemon", help="background sync loop")
     dm.add_argument("--interval", type=int, default=120)
     g = dm.add_mutually_exclusive_group()
@@ -60,6 +62,8 @@ def _dispatch(cmd: str, args: argparse.Namespace) -> int:
     from monospace.core import config, secrets
     from monospace.cli.output import interactive
 
+    if cmd == "mcp" and getattr(args, "mcp_cmd", None) == "install":
+        return cli_mcp_setup.run(args)
     if cmd == "mcp":
         from monospace.mcp_server import serve
 

@@ -25,7 +25,7 @@ Textual SVG screenshots of a FakeServer demo mailbox.
 ```
 src/monospace/
   cli/          main.py (argparse dispatch, TUI default) · mail.py · accounts.py (+ `oauth`)
-                outbox.py · doctor.py · update.py · daemon.py (systemd/launchd) · output.py (json, interactive())
+                outbox.py · doctor.py · update.py · mcp_setup.py (`mcp install claude|codex`) · daemon.py (systemd/launchd) · output.py (json, interactive())
   mcp_server.py MCPServer (mcp 2.x — FastMCP was renamed) tools wrapping core.service
   core/         ← NO UI IMPORTS (tests/test_purity.py enforces; also ≤350 lines/file)
     paths.py        XDG dirs; MONOSPACE_HOME relocates everything

@@ -48,7 +48,7 @@ vim keys, `/` search and one-key actions.
 <td width="50%" valign="top">
 
 ### 🤖 AI-native, with guardrails
-A built-in **MCP server** and a `--json` CLI let Claude (or any agent) triage,
+A built-in **MCP server** and a `--json` CLI let Claude, Codex (or any agent) triage,
 search, draft and reply. You choose per account what an agent may do:
 
 | `ai_send` | agent sends become… |
@@ -141,14 +141,41 @@ be legible that way (logos, avatars) stay as text labels. Pick a theme with `Ctr
 
 ## Let your AI read your mail, safely
 
+Works with **Claude Code**, **OpenAI Codex**, and any other MCP client that runs stdio servers:
+
 ```sh
-claude mcp add monospace -- monospace mcp
+monospace mcp install claude     # runs: claude mcp add --scope user monospace -- /abs/path/monospace mcp
+monospace mcp install codex      # runs: codex mcp add monospace -- /abs/path/monospace mcp
+monospace mcp install codex --print   # just show the command / config, change nothing
 ```
+
+`install` calls the client's own `mcp add` with the **absolute path** to `monospace`, because AI clients
+launch MCP servers with a minimal environment where `~/.local/bin` may not be on `PATH`.
+
+<details>
+<summary><b>Manual setup</b> (Codex <code>config.toml</code>, other clients)</summary>
+
+Codex, in `~/.codex/config.toml` (find the path with `which monospace`):
+
+```toml
+[mcp_servers.monospace]
+command = "/home/you/.local/bin/monospace"
+args = ["mcp"]
+```
+
+Claude Code: `claude mcp add --scope user monospace -- "$(which monospace)" mcp`.
+Any other client: run the command `monospace` with the argument `mcp` over stdio.
+
+**Headless machines (encrypted secrets file):** AI clients don't pass your shell's environment through, so a
+`MONOSPACE_PASSPHRASE` exported in `.bashrc` won't reach the server. Run `monospace` once and answer **y** to
+*Remember it on this machine?*. Alternatively pass it explicitly (`codex mcp add --env MONOSPACE_PASSPHRASE=…`),
+but that stores it in the client's config file in plain text.
+</details>
 
 Then ask: *"Summarise my unread mail and draft replies to anything from Priya."*
 
 ```
- you ──▶ Claude ──MCP──▶ monospace ──IMAP/SMTP──▶ your provider
+ you ──▶ Claude / Codex ──MCP──▶ monospace ──IMAP/SMTP──▶ your provider
                              │
                              └─ ai_send policy:  draft │ confirm ─▶ outbox (you approve, O / y) │ allow
 ```
