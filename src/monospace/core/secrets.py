@@ -96,7 +96,36 @@ def backend_name() -> str:
     return _backend_name or ("keyring" if keyring_usable() else "file")
 
 
-def get_store(prompt: Callable[[str], str] | None = None) -> SecretStore:
+def remembered_passphrase() -> str:
+    path = paths.passphrase_file()
+    try:
+        if path.stat().st_mode & 0o077:  # group/world-readable: refuse rather than trust it
+            return ""
+        return path.read_text().strip()
+    except OSError:
+        return ""
+
+
+def remember_passphrase(phrase: str) -> Path:
+    paths.ensure_dirs()
+    path = paths.passphrase_file()
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(phrase)
+    os.chmod(path, 0o600)
+    return path
+
+
+def forget_passphrase() -> bool:
+    try:
+        paths.passphrase_file().unlink()
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def get_store(prompt: Callable[[str], str] | None = None,
+              confirm: Callable[[str], bool] | None = None) -> SecretStore:
     global _store, _backend_name
     if _store is not None:
         return _store
@@ -107,19 +136,31 @@ def get_store(prompt: Callable[[str], str] | None = None) -> SecretStore:
         _store, _backend_name = KeyringStore(), "keyring"
     else:
         _backend_name = "file"
-        if prompt is not None and _fallback_reason:
+        phrase = os.environ.get("MONOSPACE_PASSPHRASE", "") or remembered_passphrase()
+        asked = False
+        if not phrase and prompt is not None:
             import sys
 
-            print(f"monospace: {_fallback_reason}; using the encrypted secrets file instead.", file=sys.stderr)
-        phrase = os.environ.get("MONOSPACE_PASSPHRASE", "")
-        if not phrase and prompt is not None:
-            phrase = prompt("Passphrase for monospace secrets file: ")
+            if _fallback_reason and not paths.secrets_file().exists():  # explain once, on first use
+                print(f"monospace: {_fallback_reason}; using an encrypted secrets file instead.", file=sys.stderr)
+            phrase, asked = prompt("Passphrase for monospace secrets file: "), True
         if not phrase:
             why = _fallback_reason or "no OS keyring available"
             raise PassphraseError(
                 f"{why}; set MONOSPACE_PASSPHRASE to unlock the encrypted secrets file"
             )
-        _store, _backend_name = EncryptedFileStore(paths.secrets_file(), phrase), "file"
+        store = EncryptedFileStore(paths.secrets_file(), phrase)
+        try:
+            store.get("__probe__")  # raises PassphraseError on a wrong passphrase, before remembering it
+        except PassphraseError:
+            if asked or prompt is None or os.environ.get("MONOSPACE_PASSPHRASE"):
+                raise
+            forget_passphrase()  # the remembered one no longer matches: drop it and ask
+            return get_store(prompt, confirm)
+        if asked and confirm is not None and confirm(
+                f"Remember it on this machine (saved to {paths.passphrase_file()}, readable only by you)? [y/N] "):
+            remember_passphrase(phrase)
+        _store, _backend_name = store, "file"
     return _store
 
 

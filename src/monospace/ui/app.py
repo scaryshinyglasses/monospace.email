@@ -16,7 +16,7 @@ from textual import work
 from textual.app import App
 from textual.binding import Binding
 
-from monospace.core import clipboard, platform, update
+from monospace.core import clipboard, config, platform, update
 from monospace.core.compose import Draft
 from monospace.core.service import Service
 from monospace.core.watch import Watcher
@@ -42,7 +42,10 @@ class MonospaceApp(App):
         self.watcher: Watcher | None = None
 
     def on_mount(self) -> None:
-        self.theme = "tokyo-night" if "tokyo-night" in self.available_themes else self.theme
+        saved = self.svc.cfg.settings.theme
+        self.theme = saved if saved in self.available_themes else (
+            "tokyo-night" if "tokyo-night" in self.available_themes else self.theme)
+        self.theme_changed_signal.subscribe(self, self._remember_theme)
         self.push_screen(MainScreen())
         if not self.svc.cfg.accounts:
             self.open_account_wizard()
@@ -50,6 +53,17 @@ class MonospaceApp(App):
             self.start_watcher()
         if self.svc.cfg.settings.check_updates:
             self.check_for_update()
+
+    def _remember_theme(self, theme: object) -> None:
+        """Persist a theme picked from the command palette (ctrl+p → Theme) across sessions."""
+        name = getattr(theme, "name", str(theme))
+        cfg = self.svc.cfg
+        if cfg.settings.theme != name:
+            cfg.settings.theme = name
+            try:
+                config.save(cfg)
+            except OSError as exc:
+                self.notify(f"Could not save theme: {exc}", severity="warning")
 
     @work(thread=True, group="update-check", exit_on_error=False)
     def check_for_update(self) -> None:

@@ -38,6 +38,11 @@ def secrets_file() -> Path:
     return data_dir() / "secrets.enc"
 
 
+def passphrase_file() -> Path:
+    """Opt-in: the secrets-file passphrase remembered on this machine (mode 0600)."""
+    return data_dir() / "passphrase"
+
+
 def ensure_dirs() -> None:
     for d in (config_dir(), data_dir()):
         d.mkdir(parents=True, exist_ok=True)

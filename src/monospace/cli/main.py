@@ -70,8 +70,9 @@ def _dispatch(cmd: str, args: argparse.Namespace) -> int:
     cfg = config.load()
     # Unlock the secrets store up front so a passphrase prompt never lands mid-TUI.
     prompt = (lambda label: __import__("getpass").getpass(label)) if interactive() else None
+    confirm = (lambda label: input(label).strip().lower() in ("y", "yes")) if interactive() else None
     if cmd != "doctor":
-        secrets.get_store(prompt)
+        secrets.get_store(prompt, confirm)
     if cmd in ("account", "oauth"):
         return cli_accounts.run(args, cfg)
     if cmd == "doctor":

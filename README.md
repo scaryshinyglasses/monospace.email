@@ -132,7 +132,12 @@ In compose, `Ctrl+S` sends and `Ctrl+D` saves a draft.
 `Ctrl+V` pastes the system clipboard via `pbpaste` / `wl-paste` / `xclip` / `xsel` when a display is
 available; your terminal's own paste (`Cmd+V`, `Ctrl+Shift+V`) always works. Copies go out over OSC 52
 (wrapped for tmux/screen) plus the native tool, so they reach your local clipboard over SSH too. In tmux, set
-`set -g set-clipboard on` and `set -g allow-passthrough on`.
+`set -g set-clipboard on` and `set -g allow-passthrough on` in `~/.tmux.conf` (these are tmux commands, not shell
+commands; apply them with `tmux source-file ~/.tmux.conf`).
+
+**Images:** in Kitty, Ghostty, WezTerm, iTerm2, foot or Konsole, images draw at full resolution. Other terminals
+(macOS Terminal.app, VS Code, most SSH setups without passthrough) get coloured half-blocks; images too small to
+be legible that way (logos, avatars) stay as text labels. Pick a theme with `Ctrl+P` → *Theme*; it's remembered.
 
 ## Let your AI read your mail, safely
 
@@ -219,7 +224,9 @@ Some tenants need an admin to enable SMTP AUTH for the mailbox.
 | Background sync | launchd | systemd `--user` | systemd `--user` | systemd `--user` |
 
 On machines without a usable keyring (none installed, or one that's locked and can't prompt, as with GNOME Keyring over SSH), secrets live in `~/.local/share/monospace/secrets.enc` (Fernet + scrypt, mode `0600`),
-unlocked by `MONOSPACE_PASSPHRASE` or a prompt.
+unlocked by `MONOSPACE_PASSPHRASE` or a prompt. After the prompt you can choose to remember the passphrase on
+that machine (`~/.local/share/monospace/passphrase`, mode `0600`; delete the file to forget it). That makes the
+file's protection equal to your account's file permissions, like keeping the passphrase in your shell profile.
 
 <details>
 <summary><b>Files and environment variables</b></summary>

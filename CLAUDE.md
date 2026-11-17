@@ -67,6 +67,9 @@ src/monospace/
   overrides `copy_to_clipboard` and the `clipboard` property (what `ctrl+v` pastes) → `core/clipboard.py`.
 - Images: `ImageView` sets BOTH width and height in cells. Never `height: auto` on a textual_image widget —
   ≥0.14 computes it from a pre-layout width of 0, so static images render 0 rows tall (GIFs hid this).
+  In half-cell/unicode mode (`image_view.LOW_FIDELITY`) images < 24 cols stay labels.
+- Theme: `settings.theme`, applied on mount and saved via `theme_changed_signal`.
+- File-store passphrase: env → remembered `data/passphrase` (0600, opt-in after prompt) → prompt.
 - Don't name Textual subclass members after framework internals (`refresh_row`, `_composed` both bit us).
 - Tests use `tests/fakes.py` FakeServer/FakeSession + `MONOSPACE_SECRETS` memory store (conftest autouse).
 - Headless smoke test: ubuntu:24.04 container, `MONOSPACE_PASSPHRASE`, `TERM=linux` under `script`.

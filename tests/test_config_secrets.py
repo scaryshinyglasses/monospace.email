@@ -87,3 +87,32 @@ def test_no_native_clipboard_when_headless(monkeypatch):
     monkeypatch.setattr(platform, "has_display", lambda: False)
     assert clipboard.native_paste() is None
     assert clipboard.native_copy("x") is False
+
+
+def test_passphrase_remembered_once_and_reused(monkeypatch):
+    import keyring
+    from keyring.backends import fail
+
+    from monospace.core import paths, secrets
+
+    monkeypatch.setattr(keyring, "get_keyring", lambda: fail.Keyring())
+    monkeypatch.setenv("MONOSPACE_SECRETS", "auto")
+    monkeypatch.delenv("MONOSPACE_PASSPHRASE", raising=False)
+    asked: list[str] = []
+
+    def prompt(label):
+        asked.append(label)
+        return "pw"
+
+    secrets.set_store(None)
+    secrets.get_store(prompt, lambda label: True).set("a:password", "x")
+    assert (paths.passphrase_file().stat().st_mode & 0o777) == 0o600
+    secrets.set_store(None)
+    assert secrets.get_store(prompt, lambda label: True).get("a:password") == "x"
+    assert len(asked) == 1  # second start: no prompt
+
+    # a stale remembered passphrase is dropped and the user is asked again
+    paths.passphrase_file().write_text("wrong")
+    secrets.set_store(None)
+    assert secrets.get_store(prompt, lambda label: False).get("a:password") == "x"
+    assert len(asked) == 2 and not paths.passphrase_file().exists()

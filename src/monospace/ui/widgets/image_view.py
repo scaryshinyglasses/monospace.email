@@ -15,6 +15,8 @@ from textual.app import ComposeResult
 from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Static
+from textual_image.renderable import HalfcellImage, UnicodeImage
+from textual_image.renderable import Image as _DetectedRenderable
 from textual_image.widget import Image as TerminalImage
 from textual_image.widget import get_cell_size
 
@@ -24,6 +26,10 @@ from monospace.render.html_blocks import ImageBlock
 from monospace.ui.glyphs import glyph
 
 MAX_COLS = 100
+# Without Kitty/Sixel, pixels become coloured half-blocks (2 pixels per cell). Logos, avatars and
+# icons that small turn into unreadable smudges, so below this width we keep the text label.
+LOW_FIDELITY = _DetectedRenderable in (HalfcellImage, UnicodeImage)
+MIN_LOW_FI_COLS = 24
 
 
 def _label(block: ImageBlock, note: str) -> str:
@@ -90,11 +96,15 @@ class ImageView(Widget):
         return cols, rows
 
     def _show(self, anim: gif.Animation) -> None:
-        self._anim = anim
         first = anim.frames[0]
+        cols, rows = self._cells(first)
+        if LOW_FIDELITY and cols < MIN_LOW_FI_COLS:
+            self._set_note("too small to draw without terminal graphics (Kitty/Sixel)")
+            return
+        self._anim = anim
         self.query(".placeholder").remove()
         self._img = TerminalImage(first)
-        self._img.styles.width, self._img.styles.height = self._cells(first)
+        self._img.styles.width, self._img.styles.height = cols, rows
         if self.block.href:
             self._img.tooltip = self.block.href
         self.mount(self._img)

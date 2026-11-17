@@ -53,7 +53,10 @@ async def test_browse_and_read(svc):
         assert len(reader.query(AttachmentBar)) == 1
 
 
-async def test_gif_renders_and_animates(svc, server):
+async def test_gif_renders_and_animates(svc, server, monkeypatch):
+    from monospace.ui.widgets import image_view
+
+    monkeypatch.setattr(image_view, "LOW_FIDELITY", False)  # 40px GIF; tests run without a tty
     server.deliver("INBOX", _gif_mail())
     svc.sync()
     app = MonospaceApp(svc, watch=False)
@@ -194,3 +197,30 @@ async def test_static_image_gets_real_height(svc, server):
         assert view._img is not None
         assert view._img.region.width >= 6
         assert view._img.region.height >= 2  # 300×150 px → roughly half as tall as wide in pixels
+
+
+async def test_tiny_images_stay_labels_without_terminal_graphics(svc, server, monkeypatch):
+    from monospace.ui.widgets import image_view
+
+    monkeypatch.setattr(image_view, "LOW_FIDELITY", True)
+    server.deliver("INBOX", _gif_mail())  # 40×20 px → a smudge in half-blocks
+    svc.sync()
+    app = MonospaceApp(svc, watch=False)
+    async with app.run_test(size=(140, 50)) as pilot:
+        await _open(pilot, app, "Animated")
+        await app.workers.wait_for_complete()
+        await pilot.pause(0.1)
+        view = app.screen.query_one(ImageView)
+        assert view._img is None
+        assert "too small" in str(view.query_one(".placeholder").render())
+
+
+async def test_theme_persists(svc):
+    app = MonospaceApp(svc, images=False, watch=False)
+    async with app.run_test() as pilot:
+        app.theme = "nord"
+        await pilot.pause()
+    assert svc.cfg.settings.theme == "nord"
+    app2 = MonospaceApp(svc, images=False, watch=False)
+    async with app2.run_test():
+        assert app2.theme == "nord"
