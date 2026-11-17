@@ -212,3 +212,20 @@ def test_sanitizer_is_stable_and_drops_comments_in_dom():
     # link target must be visible in the text part
     assert not html_matches_text('<a href="https://evil.example">invoice</a>', "invoice")
     assert html_matches_text('<a href="https://ok.example">docs</a>', "[docs](https://ok.example)")
+
+
+def test_link_targets_compared_as_urls():
+    from monospace.core.sanitize import html_matches_text, sanitize_html
+
+    # same words, different host
+    assert not html_matches_text('<a href="https://ok.example.evil.com">docs</a>', "[docs](https://ok.example/evil.com)")
+    assert not html_matches_text('<a href="https://evil.com">docs</a>', "docs")
+    assert html_matches_text('<p>See <a href="https://OK.example/a">docs</a>.</p>', "See [docs](https://ok.example/a).")
+    assert "href" not in sanitize_html('<a href="https://ok.example@evil.com">x</a>')  # userinfo dropped
+    assert "<!--" not in sanitize_html('<img src="cid:a" alt="x<!--y--></p><script>">')
+
+
+def test_visible_url_in_html_still_matches():
+    from monospace.core.sanitize import html_matches_text
+
+    assert html_matches_text('<p>Go to <a href="https://a.io/x">https://a.io/x</a></p>', "Go to <https://a.io/x>")
