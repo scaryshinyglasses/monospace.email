@@ -14,7 +14,7 @@
 **[Website ↗](https://monospace.arp244.dev)**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | sh
+curl -fsSL https://monospace.arp244.dev/install.sh | sh
 ```
 
 <img src="docs/assets/screenshot-reader.svg" alt="monospace reading a newsletter: folder tree, message list and rendered HTML" width="100%">
@@ -80,7 +80,7 @@ The one-liner works on **macOS and Linux** (x86_64 and arm64), including minimal
 Python or git installed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | sh
+curl -fsSL https://monospace.arp244.dev/install.sh | sh
 ```
 
 It installs [uv](https://docs.astral.sh/uv/) if you don't have it. uv then fetches its own Python, and
@@ -95,10 +95,10 @@ uv tool install git+https://github.com/scaryshinyglasses/monospace.email
 pipx install git+https://github.com/scaryshinyglasses/monospace.email
 
 # a specific version
-curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | MONOSPACE_REF=v0.1.0 sh
+curl -fsSL https://monospace.arp244.dev/install.sh | MONOSPACE_REF=v0.1.0 sh
 
 # upgrade: `monospace update` (or run the installer again);  uninstall (your config and mail cache are kept):
-curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | sh -s -- --uninstall
+curl -fsSL https://monospace.arp244.dev/install.sh | sh -s -- --uninstall
 ```
 </details>
 

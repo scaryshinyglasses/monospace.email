@@ -1,7 +1,7 @@
 #!/bin/sh
 # monospace.email installer — macOS & Linux (incl. headless servers).
 #
-#   curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | sh
+#   curl -fsSL https://monospace.arp244.dev/install.sh | sh
 #
 # Env overrides:
 #   MONOSPACE_REF=v0.2.0      install a tag/branch/commit (default: main)

@@ -16,6 +16,10 @@ jobs:
       MONOSPACE_SECRETS: memory
     steps:
       - uses: actions/checkout@v4
+      - name: Check published installer
+        run: |
+          sh -n install.sh
+          cmp install.sh website/install.sh
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --python ${{ matrix.python }}
       - run: uv run pytest -q

@@ -32,7 +32,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://monospace.email"
+Homepage = "https://monospace.arp244.dev"
 Repository = "https://github.com/scaryshinyglasses/monospace.email"
 Issues = "https://github.com/scaryshinyglasses/monospace.email/issues"
 
