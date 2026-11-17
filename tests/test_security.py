@@ -100,3 +100,25 @@ def test_agent_dirs_cli_refuses_agents(svc, monkeypatch, tmp_path):
     monkeypatch.setenv("MONOSPACE_AGENT", "1")
     assert cli.main(["agent-dirs", "add", str(tmp_path)]) == 2
     assert svc.cfg.settings.agent_read_dirs == []
+
+
+def test_hidden_and_key_files_refused_inside_roots(svc, tmp_path, monkeypatch):
+    import pytest
+
+    from monospace.core import policy
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    proj = tmp_path / "projects"
+    (proj / ".git").mkdir(parents=True)
+    for rel in (".env", ".git/config", "server.pem", "id_ed25519", "logo.png"):
+        (proj / rel).write_text("x")
+    roots = [proj]
+    for rel in (".env", ".git/config", "server.pem", "id_ed25519"):
+        with pytest.raises(policy.AttachmentPolicyError):
+            policy.check_agent_attachments([str(proj / rel)], roots)
+    assert policy.check_agent_attachments([str(proj / "logo.png")], roots)
+    with pytest.raises(policy.AttachmentPolicyError):
+        policy.validate_read_dir("/etc")  # outside home
+    (tmp_path / "Library" / "Mail").mkdir(parents=True)
+    with pytest.raises(policy.AttachmentPolicyError):
+        policy.validate_read_dir(str(tmp_path / "Library" / "Mail"))

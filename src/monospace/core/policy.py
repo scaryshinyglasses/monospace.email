@@ -44,6 +44,19 @@ def agent_attachment_dir(configured: str = "") -> "Path":
     return path
 
 
+SECRET_NAMES = {"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "known_hosts", "authorized_keys",
+                "credentials", "secrets.enc", "passphrase"}
+SECRET_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".kdbx", ".keychain", ".keychain-db", ".gpg", ".asc",
+                   ".ovpn", ".ppk", ".jks", ".keystore"}
+
+
+def _secret_like(rel: "Path") -> bool:
+    """Hidden files/folders (.env, .git, .ssh …) or key material anywhere under an approved root."""
+    name = rel.name.lower()
+    return (any(part.startswith(".") for part in rel.parts) or name in SECRET_NAMES
+            or any(name.endswith(s) for s in SECRET_SUFFIXES))
+
+
 def agent_roots(settings: "object") -> "list[Path]":
     """Every folder agents may read files from: the attachment dir plus human-approved extras."""
     from pathlib import Path
@@ -70,11 +83,13 @@ def validate_read_dir(raw: str) -> "Path":
     if not real.is_dir():
         raise AttachmentPolicyError(f"not a folder: {raw}")
     home = Path.home().resolve()
-    if real == Path(real.anchor) or real == home or home.is_relative_to(real):
-        raise AttachmentPolicyError(f"{real} is too broad; pick a specific folder (e.g. ~/Documents/logos)")
-    rel = real.relative_to(home) if real.is_relative_to(home) else real
+    if real == home or home.is_relative_to(real) or not real.is_relative_to(home):
+        raise AttachmentPolicyError(f"{real}: pick a specific folder inside your home folder (e.g. ~/Documents/logos)")
+    rel = real.relative_to(home)
     if any(part.startswith(".") for part in rel.parts):
         raise AttachmentPolicyError(f"{real} is inside a hidden folder (keys and config live there)")
+    if rel.parts and rel.parts[0] in ("Library", "snap", "go", "node_modules"):
+        raise AttachmentPolicyError(f"{real} holds app data and credentials; pick a documents folder")
     for own in (paths.config_dir(), paths.data_dir()):
         own = own.resolve()
         if real.is_relative_to(own) or own.is_relative_to(real):
@@ -95,7 +110,10 @@ def check_agent_attachments(files: list[str], allowed: "Path | list[Path]") -> l
             real = p.resolve(strict=True)
         except OSError as exc:
             raise AttachmentPolicyError(f"attachment not found: {raw}") from exc
-        if not real.is_file() or not any(real.is_relative_to(r) for r in roots):
+        root = next((r for r in roots if real.is_relative_to(r)), None)
+        if root is not None and _secret_like(real.relative_to(root)):
+            raise AttachmentPolicyError(f"agents may not send hidden files or key material: {raw}")
+        if not real.is_file() or root is None:
             raise AttachmentPolicyError(
                 f"agents may only use files inside {', '.join(map(str, roots))} (got {raw}). Copy it to "
                 f"{roots[0]}, or ask the user to run `monospace agent-dirs add <folder>` in a terminal.")
