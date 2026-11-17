@@ -16,7 +16,7 @@ from textual import work
 from textual.app import App
 from textual.binding import Binding
 
-from monospace.core import clipboard, platform
+from monospace.core import clipboard, platform, update
 from monospace.core.compose import Draft
 from monospace.core.service import Service
 from monospace.core.watch import Watcher
@@ -48,6 +48,15 @@ class MonospaceApp(App):
             self.open_account_wizard()
         else:
             self.start_watcher()
+        if self.svc.cfg.settings.check_updates:
+            self.check_for_update()
+
+    @work(thread=True, group="update-check", exit_on_error=False)
+    def check_for_update(self) -> None:
+        newest = update.check()  # cached; GitHub at most once a day; never raises
+        if newest:
+            self.call_from_thread(self.notify, f"Update available ({update.short(newest)}) — run "
+                                  "[b]monospace update[/b]", title="monospace", timeout=12)
 
     def start_watcher(self) -> None:
         if not self._watch:

@@ -77,13 +77,38 @@ else
   ok "uv installed"
 fi
 
+# Pin branch installs to a commit so `monospace update` knows exactly what's installed.
+# Tags (v*) are already immutable. A failed lookup (offline, rate limit) just skips the pin.
+SHA=""
+case "$REF" in
+  v[0-9]*) ;;
+  *)
+    if [ -z "${MONOSPACE_SOURCE:-}" ]; then
+      API="https://api.github.com/repos/${REPO}/commits/${REF}"
+      if has curl; then
+        SHA="$(curl -fsSL -H 'Accept: application/vnd.github.sha' "$API" 2>/dev/null || true)"
+      else
+        SHA="$(wget -qO- --header='Accept: application/vnd.github.sha' "$API" 2>/dev/null || true)"
+      fi
+      case "$SHA" in *[!0-9a-f]* | "") SHA="" ;; esac
+    fi
+    ;;
+esac
+
 # A source archive avoids requiring git on minimal servers.
-SPEC="${MONOSPACE_SOURCE:-monospace @ https://github.com/${REPO}/archive/${REF}.tar.gz}"
+SPEC="${MONOSPACE_SOURCE:-monospace @ https://github.com/${REPO}/archive/${SHA:-$REF}.tar.gz}"
 step "Installing monospace (${D}${REF}${N}, Python ${PY})…"
 "$UV" tool install --force --python "$PY" "$SPEC" >/dev/null 2>"${TMPDIR:-/tmp}/monospace-install.log" \
   || { cat "${TMPDIR:-/tmp}/monospace-install.log" >&2; die "install failed"; }
 
 BIN_DIR="$("$UV" tool dir --bin 2>/dev/null || echo "$HOME/.local/bin")"
+
+# Record what was installed for the daily update check (skipped for local/test sources).
+if [ -z "${MONOSPACE_SOURCE:-}" ]; then
+  if [ -n "${MONOSPACE_HOME:-}" ]; then DATA="$MONOSPACE_HOME/data"; else DATA="${XDG_DATA_HOME:-$HOME/.local/share}/monospace"; fi
+  mkdir -p "$DATA" && chmod 700 "$DATA" 2>/dev/null
+  printf '{"ref": "%s", "sha": "%s", "installed_at": %s}\n' "$REF" "$SHA" "$(date +%s)" > "$DATA/install.json" || true
+fi
 ok "installed ${B}monospace${N} → ${D}${BIN_DIR}/monospace${N}"
 
 case ":$PATH:" in

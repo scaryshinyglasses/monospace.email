@@ -95,7 +95,7 @@ pipx install git+https://github.com/scaryshinyglasses/monospace.email
 # a specific version
 curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | MONOSPACE_REF=v0.1.0 sh
 
-# upgrade = run the installer again;  uninstall (your config and mail cache are kept):
+# upgrade: `monospace update` (or run the installer again);  uninstall (your config and mail cache are kept):
 curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/main/install.sh | sh -s -- --uninstall
 ```
 </details>
@@ -105,6 +105,7 @@ curl -fsSL https://raw.githubusercontent.com/scaryshinyglasses/monospace.email/m
 ```sh
 monospace            # opens the client — the first run walks you through adding an account
 monospace doctor     # checks keyring, terminal graphics and connectivity
+monospace update     # installs the latest version (the app tells you when one exists)
 ```
 
 <div align="center">
@@ -238,7 +239,8 @@ unlocked by `MONOSPACE_PASSPHRASE` or a prompt.
 | `MONOSPACE_AGENT=1` | treat this CLI call as an agent (applies the `ai_send` policy) |
 | `MONOSPACE_ASCII=1` | ASCII icons instead of emoji |
 
-Settings (`[settings]` in config.toml): `images`, `remote_images`, `download_dir`, `agent_attachment_dir`.
+Settings (`[settings]` in config.toml): `images`, `remote_images`, `download_dir`, `agent_attachment_dir`,
+`check_updates` (default `true`; set `false` on offline or locked-down machines).
 </details>
 
 ## Development

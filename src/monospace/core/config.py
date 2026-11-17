@@ -91,6 +91,7 @@ class Settings:
     download_dir: str = ""
     agent_attachment_dir: str = ""  # the only folder AI agents may attach files from
     theme: str = "monospace"
+    check_updates: bool = True  # daily GitHub check → in-app notice; never installs
 
 
 @dataclass

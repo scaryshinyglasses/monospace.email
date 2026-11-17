@@ -9,6 +9,7 @@ from monospace import __version__
 from monospace.cli import accounts as cli_accounts
 from monospace.cli import mail as cli_mail
 from monospace.cli import outbox as cli_outbox
+from monospace.cli import update as cli_update
 from monospace.cli.output import info
 
 MAIL_CMDS = ("sync", "ls", "folders", "read", "search", "send", "draft", "reply", "mark", "move", "attachment")
@@ -24,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     cli_accounts.add_parsers(sub)
     cli_mail.add_parsers(sub)
     cli_outbox.add_parsers(sub)
+    cli_update.add_parsers(sub)
     d = sub.add_parser("doctor", help="check config, secrets, terminal graphics and connectivity")
     d.add_argument("--json", action="store_true")
     d.add_argument("--offline", action="store_true")
@@ -63,6 +65,8 @@ def _dispatch(cmd: str, args: argparse.Namespace) -> int:
 
         serve()
         return 0
+    if cmd == "update":  # needs no config or secrets
+        return cli_update.run(args)
     cfg = config.load()
     # Unlock the secrets store up front so a passphrase prompt never lands mid-TUI.
     prompt = (lambda label: __import__("getpass").getpass(label)) if interactive() else None

@@ -25,7 +25,7 @@ Textual SVG screenshots of a FakeServer demo mailbox.
 ```
 src/monospace/
   cli/          main.py (argparse dispatch, TUI default) · mail.py · accounts.py (+ `oauth`)
-                outbox.py · doctor.py · daemon.py (systemd/launchd) · output.py (json, interactive())
+                outbox.py · doctor.py · update.py · daemon.py (systemd/launchd) · output.py (json, interactive())
   mcp_server.py MCPServer (mcp 2.x — FastMCP was renamed) tools wrapping core.service
   core/         ← NO UI IMPORTS (tests/test_purity.py enforces; also ≤350 lines/file)
     paths.py        XDG dirs; MONOSPACE_HOME relocates everything
@@ -33,6 +33,7 @@ src/monospace/
     secrets.py      keyring → EncryptedFileStore (secrets_file.py) fallback; MONOSPACE_SECRETS=keyring|file|memory
                     keyring_usable() probes a real read (locked GNOME Keyring over SSH → file fallback)
     platform.py     has_display / opener / download dir
+    update.py       install.json (ref+sha, written by install.sh / `update`) · daily GitHub check, cached · notify only
     clipboard.py    OSC 52 (tmux/screen passthrough) + native pbcopy/wl-copy/xclip/xsel; native paste
     auth/           xoauth2 · gmail (loopback + headless paste flow) · outlook (MSAL device code) · tokens (resolve())
     accounts.py     sign-in + IMAP verify shared by CLI and TUI wizards
@@ -60,6 +61,8 @@ src/monospace/
   `data/outbox-files/`. UI only auto-opens passive types (`platform.safe_to_open`) and http(s) links (`safe_url`).
 - Message `id` = SQLite rowid (stable handle for CLI/MCP); IMAP UIDs stay internal.
 - Workers: anything touching the network runs in `@work(thread=True)`; update UI via `call_from_thread`.
+- Updates are never automatic: the TUI only notifies (`settings.check_updates`); installing is `monospace update`.
+  No install.json (dev/editable install) → no network check.
 - Never bind `ctrl+c` with `priority=True`: Screen/Input/TextArea use it for copy. `MonospaceApp`
   overrides `copy_to_clipboard` and the `clipboard` property (what `ctrl+v` pastes) → `core/clipboard.py`.
 - Don't name Textual subclass members after framework internals (`refresh_row`, `_composed` both bit us).
