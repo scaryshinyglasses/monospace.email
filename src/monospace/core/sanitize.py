@@ -125,32 +125,47 @@ def _url_like(text: str) -> bool:
     return bool(_TEXT_URL.fullmatch(text.strip()))
 
 
-def _render(node, *, images: bool, strict: bool) -> str:  # type: ignore[no-untyped-def]
+def _close_link(node, inner: str, strict: bool) -> str:  # type: ignore[no-untyped-def]
+    href = node.attributes.get("href") or ""
+    target = normalize_url(href)
+    if _url_like(inner) and normalize_url(inner) == target:
+        return f" <{href}> "  # the text already is the target
+    if strict and any(normalize_url(u) != target for u in _TEXT_URL.findall(inner)):
+        raise _Mismatch  # shows one URL, goes to another
+    return f"{inner} <{href}> "
+
+
+def _render(root, *, images: bool, strict: bool) -> str:  # type: ignore[no-untyped-def]
     """Text a recipient sees, taken from the DOM (never from serialized markup or attributes).
-    Each link is followed by its target; ``strict`` raises when a link's text is a different URL."""
-    out: list[str] = []
-    child = node.child
-    while child is not None:
+    Each link is followed by its target; ``strict`` raises when a link's text names another URL.
+    Iterative (explicit stack), so arbitrarily deep nesting can't exhaust the Python stack."""
+    stack: list[list] = [[root, root.child, []]]
+    while True:
+        frame = stack[-1]
+        node, child, out = frame
+        if child is None:
+            stack.pop()
+            text = "".join(out)
+            if not stack:
+                return text
+            tag = (node.tag or "").lower()
+            if tag == "a" and node.attributes.get("href"):
+                text = _close_link(node, text, strict)
+            elif tag in _BLOCK:
+                text = f"\n{text}\n"
+            stack[-1][2].append(text)
+            continue
+        frame[1] = child.next
         tag = (child.tag or "").lower()
         if tag == "-text":
             out.append(child.text(deep=False) or "")
-        elif tag == "a" and child.attributes.get("href"):
-            href = child.attributes.get("href") or ""
-            inner = _render(child, images=images, strict=strict)
-            if _url_like(inner) and normalize_url(inner) == normalize_url(href):
-                out.append(f" <{href}> ")  # the text already is the target
-            else:
-                if strict and _url_like(inner):
-                    raise _Mismatch  # shows one URL, goes to another
-                out.append(f"{inner} <{href}> ")
         elif tag == "img":
             if images:
                 out.append(f"[image {child.attributes.get('alt') or ''} ({child.attributes.get('src') or ''})]")
+        elif tag == "br":
+            out.append("\n")
         elif not tag.startswith("-"):
-            text = _render(child, images=images, strict=strict)
-            out.append(f"\n{text}\n" if tag in _BLOCK else text)
-        child = child.next
-    return "".join(out)
+            stack.append([child, child.child, []])
 
 
 def _tidy(text: str) -> str:
@@ -179,7 +194,10 @@ def tokens(text: str) -> list[str]:
     pos = 0
     for m in _TEXT_URL.finditer(text):
         out += words(text[pos:m.start()])
-        out.append("url:" + (normalize_url(m.group(0)) or "?"))
+        norm = normalize_url(m.group(0))
+        if norm is None:  # fail closed: odd URLs must never compare equal to each other
+            raise _Mismatch
+        out.append("url:" + norm)
         pos = m.end()
     return out + words(text[pos:])
 
@@ -191,7 +209,6 @@ def html_matches_text(html: str, text: str) -> bool:
     if tree.body is None:
         return not words(text)
     try:
-        rendered = _render(tree.body, images=False, strict=True)
+        return tokens(_render(tree.body, images=False, strict=True)) == tokens(text)
     except _Mismatch:
         return False
-    return tokens(rendered) == tokens(text)

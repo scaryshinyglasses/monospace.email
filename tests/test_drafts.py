@@ -241,3 +241,16 @@ def test_links_compared_in_position_and_attributes_ignored():
     # attribute content never counts as visible text
     assert html_matches_text('<p align="x>secret">Hi</p>', "Hi")
     assert "secret" not in review_text('<p align="x>secret">Hi</p><img src="cid:a" alt="logo">')
+
+
+def test_sanitize_review_hardening():
+    from monospace.core.sanitize import html_matches_text, review_text
+
+    # URL embedded in link text that differs from the target
+    assert not html_matches_text('<a href="https://evil.io">see https://bank.io now</a>',
+                                 "see https://bank.io now <https://evil.io>")
+    # unnormalizable URLs never match each other
+    assert not html_matches_text("<p>http://a:99999/</p>", "http://b:99999/")
+    # deep nesting: no RecursionError
+    deep = "<span>" * 5000 + "hi" + "</span>" * 5000
+    assert "hi" in review_text(deep) and html_matches_text(deep, "hi")
