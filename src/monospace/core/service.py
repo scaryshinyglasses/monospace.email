@@ -17,6 +17,7 @@ from monospace.core.drafts import DraftsMixin
 from monospace.core.folders import FoldersMixin
 from monospace.core.imap import ImapSession
 from monospace.core.store import Envelope, Store
+from monospace.core.tags import TagsMixin, split_tag_query
 
 SessionFactory = Callable[[Account, tokens.Credential], ImapSession]
 Sender = Callable[[Account, "tokens.Credential | None", EmailMessage, list[str]], None]
@@ -43,7 +44,7 @@ def _default_sender(acct: Account, cred: tokens.Credential | None, msg: EmailMes
     asyncio.run(smtp.send(acct, cred, msg, rcpts))
 
 
-class Service(DraftsMixin, FoldersMixin):
+class Service(DraftsMixin, FoldersMixin, TagsMixin):
     def __init__(self, cfg: Config | None = None, store: Store | None = None, *,
                  session_factory: SessionFactory = ImapSession, sender: Sender = _default_sender,
                  credentials: Callable[[Account], tokens.Credential] | None = None) -> None:
@@ -94,7 +95,7 @@ class Service(DraftsMixin, FoldersMixin):
                         if name not in names:
                             stats.errors.append(f"{acct.name}: no folder {name!r}")
                             continue
-                        new, removed = syncmod.sync_folder(sess, self.store, acct.name, name)
+                        new, removed = syncmod.sync_folder(sess, self.store, acct.name, name, tag_mode=acct.tags)
                         stats.folders += 1
                         stats.new += new
                         stats.removed += removed
@@ -107,14 +108,24 @@ class Service(DraftsMixin, FoldersMixin):
         return [f.to_dict() for f in self.store.folders(acct.name)]
 
     def list(self, account: str | None = None, folder: str | None = None, *, limit: int = 50,
-             offset: int = 0, unread_only: bool = False) -> list[Envelope]:
+             offset: int = 0, unread_only: bool = False, tag: str | None = None) -> list[Envelope]:
         acct = self.account(account)
         return self.store.list(acct.name, self.resolve_folder(acct, folder), limit=limit, offset=offset,
-                               unread_only=unread_only)
+                               unread_only=unread_only, tag=tag)
 
     def search(self, query: str, account: str | None = None, limit: int = 50) -> list[Envelope]:
-        acct_name = self.account(account).name if account else None
-        return self.store.search(query, account=acct_name, limit=limit)
+        """Full-text search; ``tag:name`` / ``tag:"two words"`` tokens filter by tag (AND)."""
+        text, tags = split_tag_query(query)
+        names = [self.account(account).name] if account else [a.name for a in self.cfg.accounts]
+        if not tags:
+            return self.store.search(text, account=names[0] if account else None, limit=limit)
+        if text:
+            envs = self.store.search(text, account=names[0] if account else None, limit=limit * 4, tag=tags[0])
+        else:
+            envs = sorted((e for n in names for e in self.store.list(n, None, limit=limit * 4, tag=tags[0])),
+                          key=lambda e: e.date, reverse=True)
+        want = {t.casefold() for t in tags}
+        return [e for e in envs if want <= {t.casefold() for t in e.tags}][:limit]
 
     def raw(self, msg_id: int) -> bytes:
         cached = self.store.body(msg_id)

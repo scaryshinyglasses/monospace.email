@@ -21,6 +21,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("ls", help="list messages")
     p.add_argument("--folder", default="INBOX")
     p.add_argument("--unread", action="store_true")
+    p.add_argument("--tag", help="only messages with this tag")
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--sync", action="store_true", help="sync this folder first")
     p.add_argument("--json", action="store_true")
@@ -31,7 +32,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--raw", action="store_true", help="print the raw RFC 5322 source")
     p.add_argument("--json", action="store_true")
 
-    p = sub.add_parser("search", help="full-text search the cache")
+    p = sub.add_parser("search", help="full-text search the cache (tag:name filters by tag)")
     p.add_argument("query")
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--json", action="store_true")
@@ -139,6 +140,8 @@ def _print_message(svc: Service, msg_id: int, args: argparse.Namespace) -> None:
     print(ts(f"From:    {pm.from_}\nTo:      {', '.join(pm.to)}"))
     if pm.cc:
         print(ts(f"Cc:      {', '.join(pm.cc)}"))
+    if env.tags:
+        print(ts(f"Tags:    {', '.join(env.tags)}"))
     print(ts(f"Date:    {pm.date}\nSubject: {pm.subject}\n"))
     print(ts(pm.best_text()))
     for i, a in enumerate(pm.attachments):
@@ -172,7 +175,8 @@ def run(cmd: str, args: argparse.Namespace, svc: Service) -> int:
     if cmd == "ls":
         if args.sync:
             svc.sync(args.account, [args.folder])
-        envs = svc.list(args.account, args.folder, limit=args.limit, unread_only=args.unread)
+        envs = svc.list(args.account, args.folder, limit=args.limit, unread_only=args.unread,
+                        tag=args.tag)
         emit_json([e.to_dict() for e in envs]) if args.json else envelope_rows(envs)
     elif cmd == "read":
         _print_message(svc, args.id, args)

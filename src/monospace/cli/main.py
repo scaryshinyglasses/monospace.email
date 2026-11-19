@@ -12,6 +12,7 @@ from monospace.cli import mail as cli_mail
 from monospace.cli import manage as cli_manage
 from monospace.cli import mcp_setup as cli_mcp_setup
 from monospace.cli import outbox as cli_outbox
+from monospace.cli import tags as cli_tags
 from monospace.cli import update as cli_update
 from monospace.cli.output import info
 
@@ -30,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     cli_agent_dirs.add_parsers(sub)
     cli_manage.add_parsers(sub)
     cli_outbox.add_parsers(sub)
+    cli_tags.add_parsers(sub)
     cli_update.add_parsers(sub)
     d = sub.add_parser("doctor", help="check config, secrets, terminal graphics and connectivity")
     d.add_argument("--json", action="store_true")
@@ -103,6 +105,8 @@ def _dispatch(cmd: str, args: argparse.Namespace) -> int:
         return cli_manage.run(cmd, args, svc)
     if cmd == "outbox":
         return cli_outbox.run(args, svc)
+    if cmd in cli_tags.COMMANDS:
+        return cli_tags.run(cmd, args, svc)
     if cmd == "daemon":
         from monospace.cli import daemon
 

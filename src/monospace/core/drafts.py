@@ -147,7 +147,9 @@ class DraftsMixin:
             sess.select(env.folder)
             sess.delete([env.uid])
         self.store.delete_uids(env.account, env.folder, [env.uid])  # type: ignore[attr-defined]
-        return self._drafted(acct, msg["Message-ID"], f"updated draft in {env.folder}")
+        res = self._drafted(acct, msg["Message-ID"], f"updated draft in {env.folder}")
+        self.carry_tags(env, res.draft_id)  # type: ignore[attr-defined]
+        return res
 
     def replace_draft(self, msg_id: int, draft: Draft, source: policy.Source = "human") -> "SendResult":
         """Swap a stored draft for a fully edited one (the TUI/CLI editor path)."""
@@ -160,7 +162,9 @@ class DraftsMixin:
             sess.select(env.folder)
             sess.delete([env.uid])
         self.store.delete_uids(env.account, env.folder, [env.uid])  # type: ignore[attr-defined]
-        return self._drafted(acct, msg["Message-ID"], f"updated draft in {env.folder}")
+        res = self._drafted(acct, msg["Message-ID"], f"updated draft in {env.folder}")
+        self.carry_tags(env, res.draft_id)  # type: ignore[attr-defined]
+        return res
 
     def delete_draft(self, msg_id: int) -> None:
         env, acct = self._draft_env(msg_id)
@@ -195,7 +199,7 @@ class DraftsMixin:
         draft_id = None
         try:
             with self.session(acct) as sess:  # type: ignore[attr-defined]
-                syncmod.sync_folder(sess, self.store, acct.name, folder, prefetch=0)  # type: ignore[attr-defined]
+                syncmod.sync_folder(sess, self.store, acct.name, folder, prefetch=0, tag_mode=acct.tags)  # type: ignore[attr-defined]
             found = self.store.by_message_id(acct.name, folder, message_id)  # type: ignore[attr-defined]
             draft_id = found.id if found else None
         except Exception:  # the draft is saved; an id is a convenience

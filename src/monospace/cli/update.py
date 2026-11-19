@@ -27,6 +27,9 @@ def run(args: argparse.Namespace) -> int:
     if newest == current:
         info(f"monospace is up to date ({target.ref} @ {update.short(newest)})")
         return 0
+    changes = update.notes(inst if inst and inst.ref == target.ref else None, newest)
+    if changes:
+        info("what's new:\n" + "\n".join(changes) + "\n")
     if args.check:
         have = update.short(current) if current else "unknown"
         info(f"update available: {have} → {update.short(newest)} ({target.ref}). Run `monospace update`.")

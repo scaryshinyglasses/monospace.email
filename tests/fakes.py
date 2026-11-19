@@ -23,7 +23,11 @@ def make_raw(subject: str = "Hello", sender: str = "Ana <ana@example.com>", to: 
 
 
 class FakeServer:
-    def __init__(self) -> None:
+    """``mode``: "none" (no custom keywords, like Outlook.com), "keyword" (PERMANENTFLAGS has \\*),
+    "gmail" (X-GM-EXT-1; labels live in each message's ``labels`` set)."""
+
+    def __init__(self, mode: str = "none") -> None:
+        self.mode = mode
         self.folders: dict[str, dict] = {}
         self.uidvalidity = 1
         for name in ("INBOX", "Drafts", "Sent", "Archive", "Trash"):
@@ -33,7 +37,7 @@ class FakeServer:
         f = self.folders[folder]
         uid = f["next"]
         f["next"] += 1
-        f["msgs"][uid] = {"raw": raw, "flags": set(flags or [])}
+        f["msgs"][uid] = {"raw": raw, "flags": set(flags or []), "labels": set()}
         return uid
 
 
@@ -41,6 +45,7 @@ class FakeSession:
     def __init__(self, server: FakeServer) -> None:
         self.server = server
         self.selected: str | None = None
+        self.permanentflags: list[str] = []
 
     def __enter__(self) -> "FakeSession":
         return self
@@ -58,6 +63,8 @@ class FakeSession:
 
     def select(self, folder: str, readonly: bool = False) -> tuple[int, int, int]:
         self.selected = folder
+        base = ["\\Seen", "\\Flagged", "\\Deleted", "\\Draft", "\\Answered"]
+        self.permanentflags = [] if readonly else base + (["\\*"] if self.server.mode != "none" else [])
         f = self._f()
         return self.server.uidvalidity, f["next"], len(f["msgs"])
 
@@ -85,6 +92,20 @@ class FakeSession:
     def remove_flags(self, uids: list[int], flags: list[str]) -> None:
         for u in uids:
             self._f()["msgs"][u]["flags"] -= set(flags)
+
+    def has_capability(self, name: str) -> bool:
+        return name == "X-GM-EXT-1" and self.server.mode == "gmail"
+
+    def gmail_labels(self, uids: list[int]) -> dict[int, list[str]]:
+        return {u: sorted(self._f()["msgs"][u]["labels"]) for u in uids if u in self._f()["msgs"]}
+
+    def add_gmail_labels(self, uids: list[int], labels: list[str]) -> None:
+        for u in uids:
+            self._f()["msgs"][u]["labels"] |= set(labels)
+
+    def remove_gmail_labels(self, uids: list[int], labels: list[str]) -> None:
+        for u in uids:
+            self._f()["msgs"][u]["labels"] -= set(labels)
 
     def move(self, uids: list[int], dest: str) -> None:
         for u in uids:
