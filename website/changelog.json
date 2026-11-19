@@ -6,6 +6,11 @@
       "date": null,
       "entries": [
         {
+          "text": "Use a fresh Message-ID when replacing Gmail drafts",
+          "sha": "2a5e12c",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/2a5e12c"
+        },
+        {
           "text": "Make MCP batch read-only",
           "sha": "8637f82",
           "url": "https://github.com/scaryshinyglasses/monospace.email/commit/8637f82"
