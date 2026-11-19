@@ -1,14 +1,15 @@
 """Read, edit, delete and send messages in an account's Drafts folder (mixed into ``Service``).
 
-IMAP can't modify a message in place, so an edit appends the new version (same Message-ID) and
-expunges the old one. Existing attachments and inline images are written to a private snapshot dir
-so they survive the rebuild; only *new* files an agent adds pass the agent-attachment guard.
+IMAP can't modify a message in place, so an edit appends the new version and expunges the old one.
+Existing attachments and inline images are written to a private snapshot dir so they survive the
+rebuild. Only new files an agent adds pass the agent-attachment guard.
 """
 
 from __future__ import annotations
 
 import shutil
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,8 @@ from monospace.core.config import Account
 from monospace.core.store import Envelope
 
 if TYPE_CHECKING:
+    from email.message import EmailMessage
+
     from monospace.core.service import SendResult
 
 _KEEP = object()
@@ -94,6 +97,12 @@ class DraftsMixin:
                                "size": p.size} for cid, p in pm.inline.items()],
         }
 
+    def _build_replacement(self, acct: Account, draft: Draft, source: policy.Source) -> EmailMessage:
+        if acct.provider == "gmail":
+            # A labeled old version can survive in Gmail All Mail. Give each version its own ID.
+            draft = replace(draft, message_id="")
+        return self._build(acct, draft, for_draft=True, untrusted=source == "ai")  # type: ignore[attr-defined]
+
     def update_draft(self, msg_id: int, *, source: policy.Source = "human", to: list[str] | None = None,
                      cc: list[str] | None = None, bcc: list[str] | None = None, subject: str | None = None,
                      body: str | None = None, html_body: str | None = None,
@@ -141,7 +150,7 @@ class DraftsMixin:
                 raise ServiceError(f"draft {msg_id}: {exc}; remove it first (remove_inline_images)") from exc
         # removed and not re-added: drop its <img>
         draft.html_body = compose.drop_inline_refs(draft.html_body, set(pm.inline) - set(draft.inline_images))
-        msg = self._build(acct, draft, for_draft=True, untrusted=source == "ai")  # type: ignore[attr-defined]
+        msg = self._build_replacement(acct, draft, source)
         with self.session(acct) as sess:  # type: ignore[attr-defined]
             sess.append(env.folder, msg.as_bytes(), ["\\Draft", "\\Seen"])
             sess.select(env.folder)
@@ -156,7 +165,7 @@ class DraftsMixin:
         env, acct = self._draft_env(msg_id)
         if source == "ai":
             self._guard_ai(draft)  # type: ignore[attr-defined]
-        msg = self._build(acct, draft, for_draft=True, untrusted=source == "ai")  # type: ignore[attr-defined]
+        msg = self._build_replacement(acct, draft, source)
         with self.session(acct) as sess:  # type: ignore[attr-defined]
             sess.append(env.folder, msg.as_bytes(), ["\\Draft", "\\Seen"])
             sess.select(env.folder)

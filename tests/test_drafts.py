@@ -93,6 +93,28 @@ def test_add_logo_to_existing_drafts_keeps_content(svc, server, agent_dir):
     assert svc.get_draft(res3.draft_id)["subject"] == "Q4 final"
 
 
+@pytest.mark.parametrize("provider", ["gmail", "custom"])
+def test_draft_replacements_assign_message_ids_by_provider(svc, server, provider):
+    acct = svc.account()
+    acct.provider = provider
+    acct.folders["drafts"] = "Drafts"
+    saved = svc.save_draft(None, Draft(subject="Diagnostic draft", body="Initial dummy body"))
+    old_message_id = parse(_drafts(server)[0])["Message-ID"]
+
+    updated = svc.update_draft(saved.draft_id, body="Revised dummy body")
+    updated_message_id = parse(_drafts(server)[0])["Message-ID"]
+    assert (updated_message_id != old_message_id) == (provider == "gmail")
+    assert svc.get_draft(updated.draft_id)["body"].strip() == "Revised dummy body"
+
+    draft, _ = svc.load_draft(updated.draft_id)
+    draft.body, draft.html_body = "Edited in compose", ""
+    replaced = svc.replace_draft(updated.draft_id, draft)
+    assert len(_drafts(server)) == 1
+    assert (parse(_drafts(server)[0])["Message-ID"] != updated_message_id) == (provider == "gmail")
+    assert draft.message_id == updated_message_id
+    assert svc.get_draft(replaced.draft_id)["body"].strip() == "Edited in compose"
+
+
 def test_draft_ops_refuse_non_drafts(svc):
     svc.sync()
     inbox_id = svc.list()[0].id
