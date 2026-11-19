@@ -16,6 +16,7 @@ from monospace.core.config import Account, Config
 from monospace.core.drafts import DraftsMixin
 from monospace.core.folders import FoldersMixin
 from monospace.core.imap import ImapSession
+from monospace.core.query import QueryMixin
 from monospace.core.store import Envelope, Store
 from monospace.core.tags import TagsMixin, split_tag_query
 
@@ -44,7 +45,7 @@ def _default_sender(acct: Account, cred: tokens.Credential | None, msg: EmailMes
     asyncio.run(smtp.send(acct, cred, msg, rcpts))
 
 
-class Service(DraftsMixin, FoldersMixin, TagsMixin):
+class Service(DraftsMixin, FoldersMixin, TagsMixin, QueryMixin):
     def __init__(self, cfg: Config | None = None, store: Store | None = None, *,
                  session_factory: SessionFactory = ImapSession, sender: Sender = _default_sender,
                  credentials: Callable[[Account], tokens.Credential] | None = None) -> None:

@@ -210,6 +210,22 @@ class Store(TagStoreMixin):
             rows = self.db.execute(sql, (*args, limit, offset)).fetchall()
         return self.attach_tags([_env(r) for r in rows])
 
+    def query(self, accounts: list[str], where: str, args: list[object], *, text: str = "",
+              limit: int = 50, offset: int = 0) -> list[Envelope]:
+        """Newest first over ``messages m``; ``where`` comes from ``MessageFilter.to_sql``. ``text`` = FTS."""
+        cols = ", ".join("m." + c.strip() for c in _ENV_COLS.split(","))
+        sql, params = f"SELECT {cols} FROM messages m", []  # type: str, list[object]
+        fts = " ".join(f'"{t}"*' for t in text.replace('"', " ").split() if t)
+        if fts:
+            sql, params = sql + " JOIN search s ON s.rowid = m.id WHERE search MATCH ?", [fts]
+        else:
+            sql += " WHERE 1"
+        marks = ",".join("?" * len(accounts))
+        sql += f" AND m.account IN ({marks}){where} ORDER BY julianday(m.date) DESC, m.id DESC LIMIT ? OFFSET ?"
+        with self.lock:
+            rows = self.db.execute(sql, (*params, *accounts, *args, limit, offset)).fetchall()
+        return self.attach_tags([_env(r) for r in rows])
+
     def search(self, query: str, *, account: str | None = None, limit: int = 50,
                tag: str | None = None) -> list[Envelope]:
         fts = " ".join(f'"{t}"*' for t in query.replace('"', " ").split() if t)
