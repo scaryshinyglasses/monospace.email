@@ -79,6 +79,7 @@ A local SQLite cache with full-text search, and new mail pushed over IMAP IDLE.
 
 **Unreleased**
 
+- Make MCP batch read-only ([8637f82](https://github.com/scaryshinyglasses/monospace.email/commit/8637f82))
 - MCP: fewer round trips — filters, multi-id tools, where targets, batch ([6516622](https://github.com/scaryshinyglasses/monospace.email/commit/6516622))
 - Fix lint errors ([0f88350](https://github.com/scaryshinyglasses/monospace.email/commit/0f88350))
 - Key tags on Message-ID plus sender ([97eecee](https://github.com/scaryshinyglasses/monospace.email/commit/97eecee))
@@ -86,7 +87,6 @@ A local SQLite cache with full-text search, and new mail pushed over IMAP IDLE.
 - Add tags for messages and drafts (TUI, CLI, MCP, search) ([ae74da8](https://github.com/scaryshinyglasses/monospace.email/commit/ae74da8))
 - Serve installer from Monospace website URL ([733a6eb](https://github.com/scaryshinyglasses/monospace.email/commit/733a6eb))
 - Create Monospace product website ([788593e](https://github.com/scaryshinyglasses/monospace.email/commit/788593e))
-- Sanitizer review path: iterative render, fail closed on odd URLs ([64a995a](https://github.com/scaryshinyglasses/monospace.email/commit/64a995a))
 
 [Full changelog](CHANGELOG.md) · [Releases](https://github.com/scaryshinyglasses/monospace.email/releases)
 <!-- release-notes:end -->

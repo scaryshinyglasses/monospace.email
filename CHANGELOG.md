@@ -6,6 +6,7 @@ only adds commits it hasn't seen. Releases: https://github.com/scaryshinyglasses
 
 ## Unreleased
 
+- Make MCP batch read-only ([8637f82](https://github.com/scaryshinyglasses/monospace.email/commit/8637f82))
 - MCP: fewer round trips — filters, multi-id tools, where targets, batch ([6516622](https://github.com/scaryshinyglasses/monospace.email/commit/6516622))
 - Fix lint errors ([0f88350](https://github.com/scaryshinyglasses/monospace.email/commit/0f88350))
 - Key tags on Message-ID plus sender ([97eecee](https://github.com/scaryshinyglasses/monospace.email/commit/97eecee))

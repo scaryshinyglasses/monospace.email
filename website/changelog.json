@@ -6,6 +6,11 @@
       "date": null,
       "entries": [
         {
+          "text": "Make MCP batch read-only",
+          "sha": "8637f82",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/8637f82"
+        },
+        {
           "text": "MCP: fewer round trips — filters, multi-id tools, where targets, batch",
           "sha": "6516622",
           "url": "https://github.com/scaryshinyglasses/monospace.email/commit/6516622"
