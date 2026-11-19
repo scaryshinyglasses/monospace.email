@@ -6,6 +6,8 @@ only adds commits it hasn't seen. Releases: https://github.com/scaryshinyglasses
 
 ## Unreleased
 
+- MCP: fewer round trips — filters, multi-id tools, where targets, batch ([6516622](https://github.com/scaryshinyglasses/monospace.email/commit/6516622))
+- Fix lint errors ([0f88350](https://github.com/scaryshinyglasses/monospace.email/commit/0f88350))
 - Key tags on Message-ID plus sender ([97eecee](https://github.com/scaryshinyglasses/monospace.email/commit/97eecee))
 - Generate release notes on every push; add a release workflow ([962c2cd](https://github.com/scaryshinyglasses/monospace.email/commit/962c2cd))
 - Add tags for messages and drafts (TUI, CLI, MCP, search) ([ae74da8](https://github.com/scaryshinyglasses/monospace.email/commit/ae74da8))

@@ -6,6 +6,16 @@
       "date": null,
       "entries": [
         {
+          "text": "MCP: fewer round trips — filters, multi-id tools, where targets, batch",
+          "sha": "6516622",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/6516622"
+        },
+        {
+          "text": "Fix lint errors",
+          "sha": "0f88350",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/0f88350"
+        },
+        {
           "text": "Key tags on Message-ID plus sender",
           "sha": "97eecee",
           "url": "https://github.com/scaryshinyglasses/monospace.email/commit/97eecee"
