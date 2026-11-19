@@ -7,7 +7,10 @@ passphrase from ``MONOSPACE_PASSPHRASE`` or, if a prompt callback is supplied, a
 from __future__ import annotations
 
 import os
-from typing import Callable, Protocol
+from typing import TYPE_CHECKING, Callable, Protocol
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from monospace.core import paths
 from monospace.core.secrets_file import EncryptedFileStore, PassphraseError

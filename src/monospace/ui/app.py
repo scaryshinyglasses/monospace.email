@@ -1,4 +1,5 @@
 """MonospaceApp — the Textual shell: screens, background watcher, links, attachments, sending."""
+# ruff: noqa: E402  (image_view must be imported before Textual; see below)
 
 from __future__ import annotations
 

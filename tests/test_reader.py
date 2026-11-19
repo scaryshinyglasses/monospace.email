@@ -1,7 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Static
 
-from monospace.ui.app import MonospaceApp  # initializes terminal image support
+from monospace.ui.app import MonospaceApp  # noqa: F401  initializes terminal image support
 from monospace.ui.widgets.reader import Reader
 
 
