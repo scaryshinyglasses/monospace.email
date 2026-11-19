@@ -55,6 +55,25 @@
 
     <section class="install-section wrap" id="install" aria-labelledby="install-title"><div class="section-heading"><span class="eyebrow">03 / MAKE YOURSELF AT HOME</span><h2 id="install-title">One command.<br><em>Then, your inbox.</em></h2><p>For macOS and Linux, including headless servers. The installer handles uv and Python if you need them.</p></div><div class="install-terminal"><div class="install-label"><span>TERMINAL</span><span>macOS / Linux</span></div><div class="command-row"><span class="shell-prompt" aria-hidden="true">$</span><code id="install-command">curl -fsSL https://monospace.arp244.dev/install.sh | sh</code><button class="copy-button" type="button" data-copy="install-command" aria-label="Copy installation command">Copy <span aria-hidden="true">⧉</span></button></div><div class="launch-command"><span aria-hidden="true">$</span><code>monospace</code><span>That's it. Add your first account in the app.</span></div></div><p class="copy-status" id="copy-status" role="status"></p><div class="install-options"><a href="install.sh">Read the installer <span aria-hidden="true">↗</span></a><a href="https://github.com/scaryshinyglasses/monospace.email#install">Other install methods <span aria-hidden="true">↗</span></a><a href="https://github.com/scaryshinyglasses/monospace.email#quick-start">Quick start <span aria-hidden="true">↗</span></a></div></section>
 
+    <!-- release-notes:start -->
+<section class="notes-section wrap" id="whats-new" aria-labelledby="whats-new-title">
+<div class="section-heading"><span class="eyebrow">CHANGELOG / WHAT'S NEW</span><h2 id="whats-new-title">Fresh off<br><em>the main branch.</em></h2><p>Every push to main lands here. <code>monospace update</code> brings it home.</p></div>
+<div class="notes-list">
+<div class="notes-group"><h3>Unreleased</h3><ul>
+<li>Serve installer from Monospace website URL <a href="https://github.com/scaryshinyglasses/monospace.email/commit/733a6eb">733a6eb</a></li>
+<li>Create Monospace product website <a href="https://github.com/scaryshinyglasses/monospace.email/commit/788593e">788593e</a></li>
+<li>Sanitizer review path: iterative render, fail closed on odd URLs <a href="https://github.com/scaryshinyglasses/monospace.email/commit/64a995a">64a995a</a></li>
+<li>Compare HTML to text from the DOM with links tokenized in place <a href="https://github.com/scaryshinyglasses/monospace.email/commit/fba7dc8">fba7dc8</a></li>
+<li>Allowlist file types agents may send from approved read dirs <a href="https://github.com/scaryshinyglasses/monospace.email/commit/f075902">f075902</a></li>
+<li>Compare link targets as normalized URLs; restrict img alt text <a href="https://github.com/scaryshinyglasses/monospace.email/commit/f42659a">f42659a</a></li>
+<li>Refuse hidden files and key material inside agent-readable folders <a href="https://github.com/scaryshinyglasses/monospace.email/commit/6681d9f">6681d9f</a></li>
+<li>Harden HTML sanitizer: DOM comment removal, fixed point, link-aware match <a href="https://github.com/scaryshinyglasses/monospace.email/commit/b45df56">b45df56</a></li>
+</ul></div>
+</div>
+<p class="notes-more"><a href="https://github.com/scaryshinyglasses/monospace.email/blob/main/CHANGELOG.md">Full changelog <span aria-hidden="true">↗</span></a><a href="https://github.com/scaryshinyglasses/monospace.email/releases">Releases <span aria-hidden="true">↗</span></a></p>
+</section>
+<!-- release-notes:end -->
+
     <section class="faq-section wrap" aria-labelledby="faq-title"><div><span class="eyebrow">A FEW LAST THINGS</span><h2 id="faq-title">Before you<br><em>press enter.</em></h2></div><div class="faq-list"><details><summary>Do I need to change email providers?<span aria-hidden="true">+</span></summary><p>No. Connect Gmail, Outlook / Microsoft 365, or an IMAP + SMTP account. Several accounts appear together in one folder tree.</p></details><details><summary>Will images work in my terminal?<span aria-hidden="true">+</span></summary><p>Monospace automatically detects Kitty graphics and Sixel in compatible terminals. Other terminals use coloured half-blocks. Remote images are blocked by default; press <kbd>i</kbd> to load them.</p></details><details><summary>Do I need an AI agent to use it?<span aria-hidden="true">+</span></summary><p>No. Monospace is a complete terminal email client on its own. The MCP server and JSON CLI are there when you want to connect an agent or write a script.</p></details><details><summary>Is it really free and open source?<span aria-hidden="true">+</span></summary><p>Yes. Monospace is MIT licensed. Read the source, report a bug, or contribute on <a href="https://github.com/scaryshinyglasses/monospace.email">GitHub</a>.</p></details></div></section>
   </main>
 

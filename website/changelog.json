@@ -1,0 +1,121 @@
+{
+  "repo": "https://github.com/scaryshinyglasses/monospace.email",
+  "sections": [
+    {
+      "title": "Unreleased",
+      "date": null,
+      "entries": [
+        {
+          "text": "Serve installer from Monospace website URL",
+          "sha": "733a6eb",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/733a6eb"
+        },
+        {
+          "text": "Create Monospace product website",
+          "sha": "788593e",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/788593e"
+        },
+        {
+          "text": "Sanitizer review path: iterative render, fail closed on odd URLs",
+          "sha": "64a995a",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/64a995a"
+        },
+        {
+          "text": "Compare HTML to text from the DOM with links tokenized in place",
+          "sha": "fba7dc8",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/fba7dc8"
+        },
+        {
+          "text": "Allowlist file types agents may send from approved read dirs",
+          "sha": "f075902",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/f075902"
+        },
+        {
+          "text": "Compare link targets as normalized URLs; restrict img alt text",
+          "sha": "f42659a",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/f42659a"
+        },
+        {
+          "text": "Refuse hidden files and key material inside agent-readable folders",
+          "sha": "6681d9f",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/6681d9f"
+        },
+        {
+          "text": "Harden HTML sanitizer: DOM comment removal, fixed point, link-aware match",
+          "sha": "b45df56",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/b45df56"
+        },
+        {
+          "text": "Let users approve extra folders agents may read files from",
+          "sha": "e305f53",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/e305f53"
+        },
+        {
+          "text": "Sanitize agent-written HTML so review always matches what is sent",
+          "sha": "e28489b",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/e28489b"
+        },
+        {
+          "text": "Make reviewed text match the HTML that gets sent",
+          "sha": "b11dc5e",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/b11dc5e"
+        },
+        {
+          "text": "Add draft editing, inline images and folder controls (MCP, CLI, TUI)",
+          "sha": "9ec64a3",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/9ec64a3"
+        },
+        {
+          "text": "Add `monospace mcp install claude|codex`; document Codex MCP setup",
+          "sha": "6bf9ea6",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/6bf9ea6"
+        },
+        {
+          "text": "Remember theme and passphrase; label tiny images in half-block mode",
+          "sha": "6247f55",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/6247f55"
+        },
+        {
+          "text": "Fix static images rendering 0 rows tall",
+          "sha": "4915829",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/4915829"
+        },
+        {
+          "text": "Add update check and `monospace update`",
+          "sha": "0cbc157",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/0cbc157"
+        },
+        {
+          "text": "Fix copy, paste, and crash on a locked Linux keyring",
+          "sha": "2e201d2",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/2e201d2"
+        },
+        {
+          "text": "Fix reader recomposition during rapid message changes",
+          "sha": "199409d",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/199409d"
+        },
+        {
+          "text": "Tighten attachment auto-open and outbox approval",
+          "sha": "63bfbde",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/63bfbde"
+        },
+        {
+          "text": "Run test SMTP server on the test loop (macOS CI flake)",
+          "sha": "b57c706",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/b57c706"
+        },
+        {
+          "text": "Add curl installer, security hardening and a proper README",
+          "sha": "db92a13",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/db92a13"
+        },
+        {
+          "text": "Initial release of monospace.email",
+          "sha": "5463034",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/5463034"
+        }
+      ]
+    }
+  ]
+}

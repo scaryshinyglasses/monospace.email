@@ -88,6 +88,34 @@ def latest(inst: Installed) -> str:
     return _get(f"{API}/commits/{inst.ref}", "application/vnd.github.sha")
 
 
+def notes(inst: Installed | None, newest: str, limit: int = 20) -> list[str]:
+    """What changed between the installed version and ``newest`` (best effort; [] on any failure).
+
+    Tag installs: the bodies of the GitHub Releases newer than the installed tag. Branch installs:
+    the commit subjects in between. Remote text is stripped of terminal control sequences."""
+    from monospace.core.sanitize import terminal_safe
+
+    gh = "application/vnd.github+json"
+    try:
+        if inst is not None and inst.is_tag or _TAG.match(newest):
+            lines: list[str] = []
+            for rel in json.loads(_get(f"{API}/releases?per_page=20", gh)):
+                if inst is not None and rel.get("tag_name") == inst.current:
+                    break
+                lines.append(str(rel.get("tag_name", "")))
+                lines += ["  " + ln for ln in str(rel.get("body") or "").splitlines() if ln.strip()]
+            out = lines
+        elif inst is not None and inst.sha:
+            data = json.loads(_get(f"{API}/compare/{inst.sha}...{newest}", gh))
+            out = ["- " + str(c["commit"]["message"]).splitlines()[0] for c in reversed(data.get("commits", []))]
+        else:
+            return []
+    except (UpdateError, KeyError, ValueError, TypeError, IndexError, AttributeError):
+        return []
+    clipped = [terminal_safe(x) for x in out[:limit]]
+    return clipped + (["  …"] if len(out) > limit else [])
+
+
 def check(*, force: bool = False, now: float | None = None) -> str | None:
     """The newer version id if one exists, else None. Never raises; network at most daily."""
     inst = installed()

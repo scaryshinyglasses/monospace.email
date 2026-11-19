@@ -1,0 +1,55 @@
+name: release
+# Cut a release by hand (Actions › release › Run workflow): moves CHANGELOG.md › Unreleased under the
+# version, bumps pyproject/__init__/uv.lock, re-renders README + website, tags vX.Y.Z and publishes a
+# GitHub Release with those notes. Tag installs (`MONOSPACE_REF=v…`) pick it up via `monospace update`.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-notes
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          ref: main
+          persist-credentials: false  # keep the write token out of .git/config while deps + tests run
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - name: Validate version
+        run: |
+          VERSION="${VERSION#v}"
+          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "bad version: $VERSION"; exit 1; }
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then echo "v$VERSION exists"; exit 1; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Cut changelog and bump version
+        run: |
+          python3 scripts/release_notes.py collect "$(git describe --tags --abbrev=0 2>/dev/null || echo 0)..HEAD"
+          python3 scripts/release_notes.py release "$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+          uv lock
+      - name: Test
+        run: |
+          uv sync
+          MONOSPACE_SECRETS=memory uv run pytest -q
+      - name: Commit, tag, publish
+        env:
+          GH_TOKEN: ${{ github.token }}  # only this step talks to the GitHub API
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release v$VERSION [skip ci]"
+          git tag -a "v$VERSION" -m "v$VERSION"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main "v$VERSION"
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag

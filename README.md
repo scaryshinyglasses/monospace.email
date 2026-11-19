@@ -74,6 +74,23 @@ A local SQLite cache with full-text search, and new mail pushed over IMAP IDLE.
 </tr>
 </table>
 
+<!-- release-notes:start -->
+### What's new
+
+**Unreleased**
+
+- Serve installer from Monospace website URL ([733a6eb](https://github.com/scaryshinyglasses/monospace.email/commit/733a6eb))
+- Create Monospace product website ([788593e](https://github.com/scaryshinyglasses/monospace.email/commit/788593e))
+- Sanitizer review path: iterative render, fail closed on odd URLs ([64a995a](https://github.com/scaryshinyglasses/monospace.email/commit/64a995a))
+- Compare HTML to text from the DOM with links tokenized in place ([fba7dc8](https://github.com/scaryshinyglasses/monospace.email/commit/fba7dc8))
+- Allowlist file types agents may send from approved read dirs ([f075902](https://github.com/scaryshinyglasses/monospace.email/commit/f075902))
+- Compare link targets as normalized URLs; restrict img alt text ([f42659a](https://github.com/scaryshinyglasses/monospace.email/commit/f42659a))
+- Refuse hidden files and key material inside agent-readable folders ([6681d9f](https://github.com/scaryshinyglasses/monospace.email/commit/6681d9f))
+- Harden HTML sanitizer: DOM comment removal, fixed point, link-aware match ([b45df56](https://github.com/scaryshinyglasses/monospace.email/commit/b45df56))
+
+[Full changelog](CHANGELOG.md) · [Releases](https://github.com/scaryshinyglasses/monospace.email/releases)
+<!-- release-notes:end -->
+
 ## Install
 
 The one-liner works on **macOS and Linux** (x86_64 and arm64), including minimal servers with no
@@ -334,6 +351,11 @@ Built with [Textual](https://textual.textualize.io), [textual-image](https://git
 [IMAPClient](https://github.com/mjs/imapclient), [aiosmtplib](https://github.com/cole/aiosmtplib) and the
 [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk). See [CLAUDE.md](CLAUDE.md) for the
 architecture map. Issues and PRs are welcome.
+
+**Release notes** are automatic. Each push to `main` adds its commit subjects to [CHANGELOG.md](CHANGELOG.md)
+(write them for users!) and refreshes *What's new* here and on the website. Add `[skip changelog]` to leave a
+commit out. To ship a version, run the **release** workflow in GitHub Actions; it tags `vX.Y.Z` and publishes the
+GitHub Release. Locally: `python3 scripts/release_notes.py render`.
 
 <div align="center">
 <sub>MIT © Tanmay Sheoran · made for people who live in the terminal</sub>

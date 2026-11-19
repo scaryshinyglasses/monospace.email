@@ -25,3 +25,10 @@ cp install.sh website/install.sh
 ```
 
 CI checks that both copies match. Keep `install.sh` available as a static file when configuring the host; it must return the shell script rather than an HTML fallback. The installer downloads the application source from the GitHub repository.
+
+## What's new (generated)
+
+The block between `<!-- release-notes:start -->` and `<!-- release-notes:end -->` in `index.html`, and
+`changelog.json`, are written by `scripts/release_notes.py render` from the root `CHANGELOG.md`. Don't edit
+them by hand: edit `CHANGELOG.md` and re-render. The `release-notes` workflow does this on every push to
+`main`. Styles live under `.notes-section` in `styles.css`.

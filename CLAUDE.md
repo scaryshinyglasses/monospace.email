@@ -17,7 +17,12 @@ sh install.sh                 # end-user installer (curl | sh); MONOSPACE_SOURCE
 
 `install.sh` (POSIX sh, macOS + Linux): bootstraps uv if missing, then `uv tool install` from the GitHub
 source tarball (no git needed). Test it in ubuntu:24.04 and in a temp HOME on macOS
-(`UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` overrides) before changing it. README screenshots in `docs/assets/` are
+(`UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` overrides) before changing it. Release notes: `CHANGELOG.md` is the source. `scripts/release_notes.py` (stdlib) runs `collect RANGE`, `render [--check]`
+(README + `website/index.html` marker blocks + `website/changelog.json`) and `release X.Y.Z`. The
+`.github/workflows/release-notes.yml` workflow runs collect+render on every push to main and commits back (pull after pushing);
+`release.yml` (manual dispatch) cuts the version, tags it and publishes the GitHub Release. Commit subjects become
+public HTML, so they're escaped. `tests/test_release_notes.py` fails if the marker blocks are stale.
+README screenshots in `docs/assets/` are
 Textual SVG screenshots of a FakeServer demo mailbox.
 
 ## Architecture
