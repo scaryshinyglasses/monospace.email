@@ -225,7 +225,7 @@ Then ask: *"Summarise my unread mail and draft replies to anything from Priya."*
 `tag_message` `untag_message` `list_tags`. Built for few round trips: `list_messages`/`search` filter by sender,
 recipient, subject, dates (`since: "7d"`), flags, attachments, tags or `folder: "all"`, can `sync` first and
 `include_text` inline; `read_message`/`mark`/`move`/tag tools take a list of ids (`mark` and tags also a `where`
-filter with `dry_run`); `batch` stacks up to 20 non-sending, non-destructive calls in one request.
+filter with `dry_run`); `batch` stacks up to 20 read-only calls in one request.
 
 Compose tools take `cc`/`bcc`, a markdown `body` or a raw `html_body`, and two kinds of file:
 **`attachments`** (downloadable files) and **`inline_images`** (shown inside the body, e.g. a logo).

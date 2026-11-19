@@ -37,7 +37,7 @@ src/monospace/
   mcp_drafts.py draft edit/send/delete, folder ops, outbox_cancel, InlineImage model, apply_extras
   mcp_read.py   list_messages/search (Where filter → core.query, sync=, include_text=) · read_message (1 or ≤20 ids)
   mcp_triage.py mark/move/tag_message/untag_message (id | [ids] ≤100; mark+tags also `where` + dry_run) · list_tags
-  mcp_batch.py  batch: ≤20 calls via server.call_tool, BATCHABLE allowlist only, no result references
+  mcp_batch.py  batch: ≤20 READ-ONLY calls (tools' own readOnlyHint) via server.call_tool, no result references
   core/         ← NO UI IMPORTS (tests/test_purity.py enforces; also ≤350 lines/file)
     paths.py        XDG dirs; MONOSPACE_HOME relocates everything
     config.py       Account/OAuthClients/Settings, PRESETS (gmail/outlook/custom), hand-written TOML dump
@@ -88,8 +88,8 @@ src/monospace/
   `monospace agent-dirs add`, `validate_read_dir` refuses /, home, hidden dirs, our own data);
   resolve + is_relative_to, symlinks rejected; queued outbox items snapshot files into
   `data/outbox-files/`. UI only auto-opens passive types (`platform.safe_to_open`) and http(s) links (`safe_url`).
-- MCP `batch` may only wrap `BATCHABLE` tools (reads + non-destructive, non-sending): wrapping send/delete/move
-  would bypass the client's per-tool permission prompts. Never add result references (blind read → act).
+- MCP `batch` only runs read-only tools (their `readOnlyHint`, + no `mark_read`): wrapping any write would let
+  one approval of `batch` bypass the client's per-tool permission prompts. Keep READ annotations honest. Never add result references (blind read → act).
   `where` targets stay off destructive tools (`move`, deletes).
 - Message `id` = SQLite rowid (stable handle for CLI/MCP); IMAP UIDs stay internal.
 - Tags: never let a tag name reach system flags/labels (`\Inbox` removal = archive). Draft edits re-apply tags

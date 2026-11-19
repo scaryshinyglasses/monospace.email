@@ -26,7 +26,7 @@ Save round trips — most questions need ONE call:
   `include_text=N` to inline the first N chars of each body. Omit `account` to cover every account.
 - read_message, mark, move, tag_message, untag_message take one id or a list. mark / tag_message /
   untag_message also take `where` (the same filters; `dry_run=True` previews the matches).
-- batch runs up to 20 non-sending, non-destructive calls in one request (e.g. mark + tag_message + list_tags).
+- batch runs up to 20 read-only calls in one request (e.g. list_folders + list_tags + several searches).
 Message `id`s are local integers from list_messages/search. Drafts: create_draft returns `draft_id`;
 get_draft / update_draft / send_draft / delete_draft work on it (list_messages folder="drafts" finds them).
 Attachments (files to download) and inline images (rendered in the body, e.g. a logo) are separate
