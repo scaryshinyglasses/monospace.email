@@ -85,22 +85,26 @@ async def test_bulk_and_where(svc, server):
         assert "where" not in tools["move"].input_schema["properties"]
 
 
-async def test_batch(svc, sent):
+async def test_batch_is_read_only(svc, sent):
+    svc.sync()
+    wid = next(e.id for e in svc.list() if e.subject == "Welcome")
+    writes = ["sync", "send_email", "create_draft", "update_draft", "save_attachment", "mark", "move",
+              "tag_message", "delete_draft", "batch"]
     async with Client(build_server(lambda: svc)) as client:
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+        assert tools["batch"].annotations.read_only_hint is True
         res = _data(await client.call_tool("batch", {"calls": [
-            {"tool": "sync"},
             {"tool": "list_messages", "args": {"unread_only": True}},
-            {"tool": "send_email", "args": {"to": ["x@y.com"], "subject": "s", "body": "b"}},
-            {"tool": "batch", "args": {"calls": []}},
             {"tool": "read_message", "args": {"id": 999}},
-            {"tool": "create_draft", "args": {"to": ["x@y.com"], "subject": "d", "body": "b"}},
+            {"tool": "read_message", "args": {"id": wid, "mark_read": True}},
+            *({"tool": w, "args": {}} for w in writes),
         ]}))
         r = res["results"]
-        assert [x["ok"] for x in r] == [True, True, False, False, False, True]
-        assert r[0]["result"]["new"] == 2 and [m["subject"] for m in r[1]["result"]] == ["Welcome"]
-        assert "can't be batched" in r[2]["error"] and "can't be batched" in r[3]["error"]
-        assert "no message" in r[4]["error"]
-        assert r[5]["result"]["status"] == "drafted" and sent == []
+        assert [x["ok"] for x in r] == [True] + [False] * (2 + len(writes))
+        assert [m["subject"] for m in r[0]["result"]] == ["Welcome"]
+        assert "no message" in r[1]["error"] and "mark_read" in r[2]["error"]
+        assert all("can't be batched" in x["error"] for x in r[3:])
+        assert sent == [] and svc.envelope(wid).unread and svc.list(folder="drafts") == []
         stopped = _data(await client.call_tool("batch", {"stop_on_error": True, "calls": [
             {"tool": "read_message", "args": {"id": 999}}, {"tool": "list_tags"}]}))
         assert (stopped["failed"], stopped["skipped"]) == (1, 1)
