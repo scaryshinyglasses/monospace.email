@@ -79,6 +79,7 @@ A local SQLite cache with full-text search, and new mail pushed over IMAP IDLE.
 
 **Unreleased**
 
+- Key tags on Message-ID plus sender ([97eecee](https://github.com/scaryshinyglasses/monospace.email/commit/97eecee))
 - Generate release notes on every push; add a release workflow ([962c2cd](https://github.com/scaryshinyglasses/monospace.email/commit/962c2cd))
 - Add tags for messages and drafts (TUI, CLI, MCP, search) ([ae74da8](https://github.com/scaryshinyglasses/monospace.email/commit/ae74da8))
 - Serve installer from Monospace website URL ([733a6eb](https://github.com/scaryshinyglasses/monospace.email/commit/733a6eb))
@@ -86,7 +87,6 @@ A local SQLite cache with full-text search, and new mail pushed over IMAP IDLE.
 - Sanitizer review path: iterative render, fail closed on odd URLs ([64a995a](https://github.com/scaryshinyglasses/monospace.email/commit/64a995a))
 - Compare HTML to text from the DOM with links tokenized in place ([fba7dc8](https://github.com/scaryshinyglasses/monospace.email/commit/fba7dc8))
 - Allowlist file types agents may send from approved read dirs ([f075902](https://github.com/scaryshinyglasses/monospace.email/commit/f075902))
-- Compare link targets as normalized URLs; restrict img alt text ([f42659a](https://github.com/scaryshinyglasses/monospace.email/commit/f42659a))
 
 [Full changelog](CHANGELOG.md) · [Releases](https://github.com/scaryshinyglasses/monospace.email/releases)
 <!-- release-notes:end -->

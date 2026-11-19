@@ -6,6 +6,11 @@
       "date": null,
       "entries": [
         {
+          "text": "Key tags on Message-ID plus sender",
+          "sha": "97eecee",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/97eecee"
+        },
+        {
           "text": "Generate release notes on every push; add a release workflow",
           "sha": "962c2cd",
           "url": "https://github.com/scaryshinyglasses/monospace.email/commit/962c2cd"
