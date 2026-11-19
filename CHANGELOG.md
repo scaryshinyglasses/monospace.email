@@ -6,6 +6,8 @@ only adds commits it hasn't seen. Releases: https://github.com/scaryshinyglasses
 
 ## Unreleased
 
+- Generate release notes on every push; add a release workflow ([962c2cd](https://github.com/scaryshinyglasses/monospace.email/commit/962c2cd))
+- Add tags for messages and drafts (TUI, CLI, MCP, search) ([ae74da8](https://github.com/scaryshinyglasses/monospace.email/commit/ae74da8))
 - Serve installer from Monospace website URL ([733a6eb](https://github.com/scaryshinyglasses/monospace.email/commit/733a6eb))
 - Create Monospace product website ([788593e](https://github.com/scaryshinyglasses/monospace.email/commit/788593e))
 - Sanitizer review path: iterative render, fail closed on odd URLs ([64a995a](https://github.com/scaryshinyglasses/monospace.email/commit/64a995a))

@@ -6,6 +6,16 @@
       "date": null,
       "entries": [
         {
+          "text": "Generate release notes on every push; add a release workflow",
+          "sha": "962c2cd",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/962c2cd"
+        },
+        {
+          "text": "Add tags for messages and drafts (TUI, CLI, MCP, search)",
+          "sha": "ae74da8",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/ae74da8"
+        },
+        {
           "text": "Serve installer from Monospace website URL",
           "sha": "733a6eb",
           "url": "https://github.com/scaryshinyglasses/monospace.email/commit/733a6eb"
