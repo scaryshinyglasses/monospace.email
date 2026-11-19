@@ -37,7 +37,8 @@ def envelope_rows(envs: list[Envelope]) -> None:
     for e in envs:
         mark = ("●" if e.unread else " ") + ("★" if e.flagged else " ") + ("📎" if e.has_attachments else "  ")
         date = e.date[:16].replace("T", " ")
-        print(f"{e.id:>6}  {mark} {date:16}  {_short(e.sender, 26):26}  {_short(e.subject, 60)}")
+        tags = "".join(f"  #{t}" for t in e.tags)
+        print(f"{e.id:>6}  {mark} {date:16}  {_short(e.sender, 26):26}  {_short(e.subject, 60)}{tags}")
 
 
 def ask(prompt: str) -> str:

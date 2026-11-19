@@ -48,8 +48,11 @@ class MessageList(DataTable):
         style = "bold" if e.unread else ""
         mark = (glyph("unread") if e.unread else " ") + \
             (glyph("flag") if e.flagged else (glyph("attach") if e.has_attachments else " "))
+        subject = Text(e.subject or "(no subject)", style=style)
+        for t in e.tags:
+            subject.append(f"  #{t}", style="dim italic")
         return (Text(mark, style="bold $accent" if e.unread else ""), Text(sender_name(e.sender), style=style),
-                Text(e.subject or "(no subject)", style=style), Text(short_date(e.date), style="dim"))
+                subject, Text(short_date(e.date), style="dim"))
 
     def update_envelope(self, e: Envelope) -> None:
         if str(e.id) not in self.rows:

@@ -26,9 +26,11 @@ Textual SVG screenshots of a FakeServer demo mailbox.
 src/monospace/
   cli/          main.py (argparse dispatch, TUI default) · mail.py (send/draft/reply: --attach ≠ --inline, --html)
                 manage.py (forward · drafts ls|show|edit|send|rm · folders create|rename|rm) · accounts.py (+ `oauth`)
+                tags.py (`tag add|rm|set|ls|show`; `ls --tag`)
                 outbox.py · agent_dirs.py (interactive-only) · doctor.py · update.py · mcp_setup.py (`mcp install claude|codex`) · daemon.py (systemd/launchd) · output.py (json, interactive())
   mcp_server.py MCPServer (mcp 2.x — FastMCP was renamed) tools wrapping core.service
   mcp_drafts.py draft edit/send/delete, folder ops, outbox_cancel, InlineImage model, apply_extras
+  mcp_tags.py   tag_message / untag_message / list_tags
   core/         ← NO UI IMPORTS (tests/test_purity.py enforces; also ≤350 lines/file)
     paths.py        XDG dirs; MONOSPACE_HOME relocates everything
     config.py       Account/OAuthClients/Settings, PRESETS (gmail/outlook/custom), hand-written TOML dump
@@ -41,7 +43,12 @@ src/monospace/
     accounts.py     sign-in + IMAP verify shared by CLI and TUI wizards
     imap.py         ImapSession over imapclient (sync; run in threads), UID-based
     smtp.py         aiosmtplib send (password / XOAUTH2)
-    store.py        SQLite: folders, messages, bodies, FTS5 `search`, outbox
+    store.py        SQLite: folders, messages, bodies, FTS5 `search`, outbox; Envelope.tags filled on every read
+    tag_store.py    TagStoreMixin: `tags(account, message_id, tag, source)` keyed by Message-ID header (survives
+                    moves/draft edits) + `meta` (cached tag backend per folder)
+    tags.py         TagsMixin: hybrid backend per account/folder — gmail (X-GM-LABELS) | keyword (PERMANENTFLAGS \*)
+                    | local; `account.tags=local` forces local. normalize_tags refuses \…/$… and system names.
+                    `tag:x` search tokens (split_tag_query). sync mirrors server tags (local rows untouched)
     sync.py         incremental per-folder sync (UIDVALIDITY, last UID, flag refresh, body prefetch)
     watch.py        per-account IDLE/poll threads → callback
     mime.py/compose.py  parse → ParsedMessage; Draft → EmailMessage (markdown or html_body → plain+html), reply/forward
@@ -55,8 +62,8 @@ src/monospace/
     service.py      THE façade (blocking). TUI, CLI and MCP all go through it.
   render/       html_blocks (selectolax lexbor → Text/Image blocks) · images (cid/data/remote opt-in) · gif
   ui/           app.py (MonospaceApp; imports image_view FIRST — textual_image probes the terminal at import)
-                screens/ main (e edit draft · N/E/X folders) · compose (attachments + inline images; edits a
-                stored draft via draft_id → replace_draft) · prompt · account_add · outbox     widgets/ folder_tree · message_list · reader
+                screens/ main (e edit draft · N/E/X folders · t tags) · compose (attachments + inline images; edits a
+                stored draft via draft_id → replace_draft) · prompt · account_add · outbox     widgets/ folder_tree (+ Tags branch) · message_list · reader
                 · image_view (GIF animation via set_timer) · attachment_bar     glyphs.py (ASCII fallback)
 ```
 
@@ -73,6 +80,9 @@ src/monospace/
   resolve + is_relative_to, symlinks rejected; queued outbox items snapshot files into
   `data/outbox-files/`. UI only auto-opens passive types (`platform.safe_to_open`) and http(s) links (`safe_url`).
 - Message `id` = SQLite rowid (stable handle for CLI/MCP); IMAP UIDs stay internal.
+- Tags: never let a tag name reach system flags/labels (`\Inbox` removal = archive). Draft edits re-apply tags
+  (`carry_tags`) because the re-APPENDed copy has no labels/keywords. EXAMINE has empty PERMANENTFLAGS, so
+  backend detection needs a read-write SELECT; sync instead mirrors whatever keywords/labels exist.
 - Workers: anything touching the network runs in `@work(thread=True)`; update UI via `call_from_thread`.
 - Updates are never automatic: the TUI only notifies (`settings.check_updates`); installing is `monospace update`.
   No install.json (dev/editable install) → no network check.

@@ -12,6 +12,8 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from monospace.core.tag_store import TAG_SCHEMA, TagStoreMixin
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS folders (
   account TEXT NOT NULL, name TEXT NOT NULL, delimiter TEXT DEFAULT '/', flags TEXT DEFAULT '[]',
@@ -50,6 +52,7 @@ class Envelope:
     message_id: str = ""
     uidvalidity: int = 0
     id: int = 0
+    tags: list[str] = field(default_factory=list)
 
     @property
     def unread(self) -> bool:
@@ -84,6 +87,9 @@ _ENV_COLS = ("id, account, folder, uid, uidvalidity, message_id, subject, sender
              "flags, size, has_attachments, snippet")
 
 
+_TAG_FILTER = " AND message_id IN (SELECT message_id FROM tags WHERE account=? AND tag=?)"
+
+
 def _env(row: sqlite3.Row) -> Envelope:
     d = dict(row)
     d["flags"] = json.loads(d["flags"] or "[]")
@@ -91,7 +97,7 @@ def _env(row: sqlite3.Row) -> Envelope:
     return Envelope(**d)
 
 
-class Store:
+class Store(TagStoreMixin):
     def __init__(self, path: Path | str) -> None:
         if isinstance(path, Path):
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -101,7 +107,7 @@ class Store:
         with self.lock:
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA foreign_keys=ON")
-            self.db.executescript(SCHEMA)
+            self.db.executescript(SCHEMA + TAG_SCHEMA)
 
     # ---- folders -------------------------------------------------------
     def upsert_folder(self, f: Folder) -> None:
@@ -166,7 +172,7 @@ class Store:
     def get(self, msg_id: int) -> Envelope | None:
         with self.lock:
             row = self.db.execute(f"SELECT {_ENV_COLS} FROM messages WHERE id=?", (msg_id,)).fetchone()
-        return _env(row) if row else None
+        return self.attach_tags([_env(row)])[0] if row else None
 
     def by_uid(self, account: str, folder: str, uid: int) -> Envelope | None:
         with self.lock:
@@ -186,17 +192,24 @@ class Store:
             rows = self.db.execute("SELECT uid, id FROM messages WHERE account=? AND folder=?", (account, folder))
             return {r[0]: r[1] for r in rows}
 
-    def list(self, account: str, folder: str, *, limit: int = 200, offset: int = 0,
-             unread_only: bool = False) -> list[Envelope]:
-        sql = f"SELECT {_ENV_COLS} FROM messages WHERE account=? AND folder=?"
+    def list(self, account: str, folder: str | None, *, limit: int = 200, offset: int = 0,
+             unread_only: bool = False, tag: str | None = None) -> list[Envelope]:
+        """Newest first. ``folder=None`` (only with ``tag``) lists across every folder."""
+        sql, args = f"SELECT {_ENV_COLS} FROM messages WHERE account=?", [account]
+        if folder is not None:
+            sql, args = sql + " AND folder=?", [*args, folder]
         if unread_only:
             sql += " AND flags NOT LIKE '%\\\\Seen%'"
+        if tag:
+            sql += _TAG_FILTER
+            args += [account, tag]
         sql += " ORDER BY date DESC, uid DESC LIMIT ? OFFSET ?"
         with self.lock:
-            rows = self.db.execute(sql, (account, folder, limit, offset)).fetchall()
-        return [_env(r) for r in rows]
+            rows = self.db.execute(sql, (*args, limit, offset)).fetchall()
+        return self.attach_tags([_env(r) for r in rows])
 
-    def search(self, query: str, *, account: str | None = None, limit: int = 50) -> list[Envelope]:
+    def search(self, query: str, *, account: str | None = None, limit: int = 50,
+               tag: str | None = None) -> list[Envelope]:
         fts = " ".join(f'"{t}"*' for t in query.replace('"', " ").split() if t)
         if not fts:
             return []
@@ -206,10 +219,14 @@ class Store:
         if account:
             sql += " AND m.account=?"
             args.append(account)
+        if tag:
+            sql += " AND m.message_id IN (SELECT message_id FROM tags WHERE account=m.account AND tag=?)"
+            args.append(tag)
         sql += " ORDER BY m.date DESC LIMIT ?"
         args.append(limit)
         with self.lock:
-            return [_env(r) for r in self.db.execute(sql, args).fetchall()]
+            rows = self.db.execute(sql, args).fetchall()
+        return self.attach_tags([_env(r) for r in rows])
 
     def delete_uids(self, account: str, folder: str, uids: list[int]) -> None:
         mapping = self.uids(account, folder)

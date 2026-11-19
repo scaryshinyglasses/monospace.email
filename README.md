@@ -128,11 +128,27 @@ monospace update     # installs the latest version (the app tells you when one e
 | `Ctrl+R` · `g` | sync now | `O` | AI outbox |
 | `A` | add account | `q` | quit |
 | `e` | edit the selected draft | `N` · `E` · `X` | new · rename · delete folder |
+| `t` | tag the message or draft | | |
 
 In the composer, **Attachments** are files the recipient downloads and **Inline images** show in the body.
 Write an inline image as `logo.png;width=120;position=top`, or place it yourself with `![Logo](logo.png)`.
 
 In compose, `Ctrl+S` sends and `Ctrl+D` saves a draft.
+
+### Tags
+
+Press `t` to tag any message or draft (comma-separated, empty clears). Each account gets a **Tags** branch
+in the folder tree, and `/` search understands `tag:work` and `tag:"big client"`. monospace uses the
+server's own mechanism when there is one, so other clients see your tags too:
+
+| Server | Tags are stored as |
+|---|---|
+| Gmail | **labels** (a new label also shows up as a folder, as it does in Gmail) |
+| Fastmail, Dovecot, most self-hosted IMAP | **IMAP keywords** (ASCII, no spaces) |
+| Outlook / Microsoft 365, others without keywords | **locally**, in monospace's cache only |
+
+`monospace account set work tags=local` keeps one account's tags local. System names (Inbox, Spam, Starred,
+`\Seen`, `$Junk` …) can't be used as tags, so tagging can never move or archive mail.
 
 **Copy & paste:** select text with the mouse and press `Ctrl+C` (with nothing selected, `Ctrl+C` quits).
 `Ctrl+V` pastes the system clipboard via `pbpaste` / `wl-paste` / `xclip` / `xsel` when a display is
@@ -190,6 +206,7 @@ Then ask: *"Summarise my unread mail and draft replies to anything from Priya."*
 `save_attachment` `send_email` `create_draft` `reply` `forward` `mark` `move` `outbox_list` `outbox_cancel`
 · drafts: `get_draft` `update_draft` `send_draft` `delete_draft`
 · folders: `create_folder` `rename_folder` `delete_folder` (empty, non-system only)
+· tags: `tag_message` `untag_message` `list_tags`; `list_messages(tag=…)`, `search("tag:work")`
 
 Compose tools take `cc`/`bcc`, a markdown `body` or a raw `html_body`, and two kinds of file:
 **`attachments`** (downloadable files) and **`inline_images`** (shown inside the body, e.g. a logo).
@@ -222,6 +239,8 @@ monospace drafts edit 12 --editor      # body in $EDITOR;  --detach / --remove-i
 monospace drafts send 12               # · drafts rm 12
 monospace forward 42 --to ana@example.com      # carries the attachments (--no-attachments to skip)
 monospace folders create Receipts      # · folders rename A B · folders rm A (empty only)
+monospace tag add 42 work "big client" # · tag rm 42 work · tag set 42 a,b · tag ls · tag show work
+monospace ls --tag work                # or: monospace search "tag:work invoice"
 monospace outbox list            # then: monospace outbox approve 7   (humans only)
 ```
 

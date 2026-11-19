@@ -10,7 +10,7 @@ from monospace.core import accounts, config, platform
 from monospace.core.auth import gmail
 from monospace.core.config import AI_SEND_VALUES, PRESETS, Account, Config
 
-EDITABLE = ("display_name", "username", "ai_send", "signature", "imap_host", "imap_port", "imap_tls",
+EDITABLE = ("display_name", "username", "ai_send", "signature", "tags", "imap_host", "imap_port", "imap_tls",
             "smtp_host", "smtp_port", "smtp_tls")
 
 
@@ -148,6 +148,9 @@ def run(args: argparse.Namespace, cfg: Config) -> int:
                 return 2
             if k == "ai_send" and v not in AI_SEND_VALUES:
                 info(f"ai_send must be one of {AI_SEND_VALUES}")
+                return 2
+            if k == "tags" and v not in ("auto", "local"):
+                info("tags must be 'auto' (server labels/keywords when available) or 'local'")
                 return 2
             if k == "ai_send" and not interactive():
                 info("ai_send can only be changed from an interactive terminal")

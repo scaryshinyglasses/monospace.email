@@ -54,6 +54,7 @@ class Account:
     ai_send: AiSend = "draft"
     folders: dict[str, str] = field(default_factory=dict)
     signature: str = ""
+    tags: str = "auto"  # auto (Gmail labels / IMAP keywords when the server has them) | local
 
     @property
     def login(self) -> str:
@@ -137,6 +138,8 @@ def load(path: Path | None = None) -> Config:
     for a in accounts:
         if a.ai_send not in AI_SEND_VALUES:
             raise ValueError(f"account {a.name}: ai_send must be one of {AI_SEND_VALUES}")
+        if a.tags not in ("auto", "local"):
+            raise ValueError(f"account {a.name}: tags must be 'auto' or 'local'")
     return Config(
         accounts=accounts,
         oauth=_build(OAuthClients, raw.get("oauth", {})),

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from monospace.core import mime
 from monospace.core.imap import HeaderInfo, ImapSession
 from monospace.core.store import Envelope, Folder, Store
+from monospace.core.tags import tags_from_flags, tags_from_labels
 
 INITIAL_LIMIT = 500   # headers fetched on first sync of a folder
 PREFETCH = 25         # newest bodies cached per sync (fills snippets + full-text search)
@@ -58,7 +59,8 @@ def cache_body(store: Store, msg_id: int, raw: bytes) -> mime.ParsedMessage:
 
 
 def sync_folder(sess: ImapSession, store: Store, account: str, folder: str, *,
-                initial_limit: int = INITIAL_LIMIT, prefetch: int = PREFETCH) -> tuple[int, int]:
+                initial_limit: int = INITIAL_LIMIT, prefetch: int = PREFETCH,
+                tag_mode: str = "auto") -> tuple[int, int]:
     uidvalidity, uidnext, _exists = sess.select(folder, readonly=True)
     cached = store.folder(account, folder) or Folder(account=account, name=folder)
     if cached.uidvalidity and cached.uidvalidity != uidvalidity:
@@ -85,6 +87,10 @@ def sync_folder(sess: ImapSession, store: Store, account: str, folder: str, *,
             if uid in mapping:
                 store.set_flags(mapping[uid], fl)
 
+    if tag_mode != "local":
+        refreshed = new_uids + (still_known if len(still_known) <= FLAG_REFRESH_MAX else [])
+        sync_server_tags(sess, store, account, folder, refreshed)
+
     if prefetch:
         for env in store.list(account, folder, limit=prefetch):
             if store.body(env.id) is None:
@@ -98,6 +104,20 @@ def sync_folder(sess: ImapSession, store: Store, account: str, folder: str, *,
     store.upsert_folder(cached)
     store.recount(account, folder)
     return len(new_uids), len(removed)
+
+
+def sync_server_tags(sess: ImapSession, store: Store, account: str, folder: str, uids: list[int]) -> None:
+    """Mirror Gmail labels / IMAP keywords of ``uids`` into the tags table (local tags untouched)."""
+    if not uids:
+        return
+    gmail = sess.has_capability("X-GM-EXT-1")
+    labels = sess.gmail_labels(uids) if gmail else {}
+    wanted = set(uids)
+    rows = []
+    for uid, message_id, flags in store.uid_rows(account, folder):
+        if uid in wanted and message_id:
+            rows.append((message_id, tags_from_labels(labels.get(uid, [])) if gmail else tags_from_flags(flags)))
+    store.set_server_tags_bulk(account, rows, "gmail" if gmail else "keyword")
 
 
 def detect_roles(sess: ImapSession) -> dict[str, str]:

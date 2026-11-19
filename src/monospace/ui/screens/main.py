@@ -33,6 +33,7 @@ class MainScreen(Screen):
         Binding("d,delete,number_sign", "trash", "Delete"),
         Binding("u", "toggle_read", "Unread", show=False),
         Binding("asterisk", "toggle_flag", "Flag", show=False),
+        Binding("t", "tag", "Tags"),
         Binding("slash", "search", "Search"),
         Binding("i", "remote_images", "Images"),
         Binding("H", "toggle_html", "HTML/text", show=False),
@@ -48,6 +49,7 @@ class MainScreen(Screen):
         super().__init__()
         self.account: str | None = None
         self.folder = "INBOX"
+        self.tag = ""  # set when a Tags leaf is chosen: list that tag across folders
         self.searching = ""
         self._preview: Timer | None = None
 
@@ -75,13 +77,19 @@ class MainScreen(Screen):
 
     # ---- data ----------------------------------------------------------
     def refresh_from_cache(self) -> None:
-        tree = self.query_one(FolderTree)
-        tree.populate(self.svc.cfg.accounts, {a.name: self.svc.store.folders(a.name) for a in self.svc.cfg.accounts})
+        self._populate_tree()
         if self.searching:
             return
-        self.sub_title = f"{self.account or 'no account'} · {self.folder}"
+        self.sub_title = f"{self.account or 'no account'} · {'#' + self.tag if self.tag else self.folder}"
         if self.account:
-            self.query_one(MessageList).load(self.svc.list(self.account, self.folder, limit=500))
+            envs = (self.svc.tagged(self.account, self.tag, limit=500) if self.tag
+                    else self.svc.list(self.account, self.folder, limit=500))
+            self.query_one(MessageList).load(envs)
+
+    def _populate_tree(self) -> None:
+        accts = self.svc.cfg.accounts
+        self.query_one(FolderTree).populate(accts, {a.name: self.svc.store.folders(a.name) for a in accts},
+                                            {a.name: self.svc.store.all_tags(a.name) for a in accts})
 
     @work(thread=True, exclusive=True, group="sync")
     def sync_current(self) -> None:
@@ -94,10 +102,12 @@ class MainScreen(Screen):
 
     @on(FolderTree.Chosen)
     def folder_chosen(self, event: FolderTree.Chosen) -> None:
-        self.account, self.folder, self.searching = event.account, event.folder, ""
+        self.account, self.tag, self.searching = event.account, event.tag, ""
+        self.folder = event.folder or self.folder
         self.query_one(Reader).clear_message()
         self.refresh_from_cache()
-        self.sync_current()
+        if not self.tag:
+            self.sync_current()
 
     # ---- opening -------------------------------------------------------
     @on(DataTable.RowHighlighted, "#messages")
@@ -125,8 +135,7 @@ class MainScreen(Screen):
     def _show(self, env, pm) -> None:  # type: ignore[no-untyped-def]
         self.query_one(Reader).show(env, pm)
         self.query_one(MessageList).update_envelope(env)
-        self.query_one(FolderTree).populate(
-            self.svc.cfg.accounts, {a.name: self.svc.store.folders(a.name) for a in self.svc.cfg.accounts})
+        self._populate_tree()
 
     def _current(self) -> int | None:
         reader = self.query_one(Reader)
@@ -247,6 +256,27 @@ class MainScreen(Screen):
 
     def action_toggle_flag(self) -> None:
         self._mutate("flag")
+
+    # ---- tags ----------------------------------------------------------
+    def action_tag(self) -> None:
+        msg_id = self._current()
+        if msg_id is None:
+            return self.notify("Select a message first")
+        current = ", ".join(self.svc.envelope(msg_id).tags)
+        self.app.push_screen(PromptScreen("Tags (comma-separated; empty clears):", current, "Save", allow_empty=True),
+                             lambda value: value is not None and value != current and self._set_tags(msg_id, value))
+
+    @work(thread=True, group="mutate")
+    def _set_tags(self, msg_id: int, value: str) -> None:
+        try:
+            env = self.svc.set_tags(msg_id, value)
+            self.app.call_from_thread(self.notify, "Tags: " + (", ".join(env.tags) or "(none)"))
+            reader = self.query_one(Reader)
+            if reader.envelope and reader.envelope.id == msg_id and reader.parsed:
+                self.app.call_from_thread(reader.show, env, reader.parsed)
+        except Exception as exc:
+            self.app.call_from_thread(self.notify, str(exc), severity="error")
+        self.app.call_from_thread(self.refresh_from_cache)
 
     @work(thread=True, group="mutate")
     def _mutate(self, what: str) -> None:

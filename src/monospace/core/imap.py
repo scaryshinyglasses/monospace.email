@@ -92,6 +92,7 @@ class ImapSession:
         self.acct, self.cred, self.timeout = acct, cred, timeout
         self.client: IMAPClient | None = None
         self.selected: str | None = None
+        self.permanentflags: list[str] = []
 
     def __enter__(self) -> "ImapSession":
         self.open()
@@ -136,6 +137,7 @@ class ImapSession:
     def select(self, folder: str, readonly: bool = False) -> tuple[int, int, int]:
         info = self.c.select_folder(folder, readonly=readonly)
         self.selected = folder
+        self.permanentflags = [_s(f) for f in info.get(b"PERMANENTFLAGS", ())]
         return int(info.get(b"UIDVALIDITY", 0)), int(info.get(b"UIDNEXT", 0)), int(info.get(b"EXISTS", 0))
 
     def all_uids(self) -> list[int]:
@@ -172,6 +174,23 @@ class ImapSession:
 
     def remove_flags(self, uids: list[int], flags: list[str]) -> None:
         self.c.remove_flags(uids, [f.encode() for f in flags], silent=True)
+
+    # ---- tags: IMAP keywords ride on add/remove_flags; Gmail labels below ----
+    def has_capability(self, name: str) -> bool:
+        return bool(self.c.has_capability(name))
+
+    def gmail_labels(self, uids: list[int]) -> dict[int, list[str]]:
+        out: dict[int, list[str]] = {}
+        for i in range(0, len(uids), 500):
+            for uid, labels in self.c.get_gmail_labels(uids[i:i + 500]).items():
+                out[uid] = [_s(lb) for lb in labels]
+        return out
+
+    def add_gmail_labels(self, uids: list[int], labels: list[str]) -> None:
+        self.c.add_gmail_labels(uids, labels, silent=True)
+
+    def remove_gmail_labels(self, uids: list[int], labels: list[str]) -> None:
+        self.c.remove_gmail_labels(uids, labels, silent=True)
 
     def move(self, uids: list[int], dest: str) -> None:
         if self.c.has_capability("MOVE"):

@@ -14,7 +14,7 @@ from monospace.ui.widgets.attachment_bar import AttachmentBar
 from monospace.ui.widgets.image_view import ImageView
 
 
-def header_markup(pm: ParsedMessage) -> str:
+def header_markup(pm: ParsedMessage, tags: list[str] | None = None) -> str:
     lines = [f"[b]{escape(pm.subject or '(no subject)')}[/b]",
              f"[dim]From[/]  {escape(pm.from_)}",
              f"[dim]To[/]    {escape(', '.join(pm.to))}"]
@@ -22,6 +22,8 @@ def header_markup(pm: ParsedMessage) -> str:
         lines.append(f"[dim]Cc[/]    {escape(', '.join(pm.cc))}")
     if pm.date:
         lines.append(f"[dim]Date[/]  {escape(pm.date[:16].replace('T', ' '))}")
+    if tags:
+        lines.append("[dim]Tags[/]  " + "  ".join(f"[$accent]#{escape(t)}[/]" for t in tags))
     return "\n".join(lines)
 
 
@@ -60,7 +62,7 @@ class Reader(VerticalScroll):
             yield Static(self._empty_note, id="empty")
             return
         blocks = to_blocks(pm.html) if (pm.html and self.show_html) else text_to_blocks(pm.best_text())
-        yield Static(header_markup(pm), id="headers")
+        yield Static(header_markup(pm, self.envelope.tags if self.envelope else None), id="headers")
         blocked = sum(1 for b in blocks if isinstance(b, ImageBlock) and b.is_remote) if not self.allow_remote else 0
         if blocked and self.images_enabled:
             yield Static(f"{blocked} remote image(s) blocked to protect your privacy — press "

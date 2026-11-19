@@ -13,9 +13,10 @@ from textual.widgets import Button, Input, Static
 class PromptScreen(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
 
-    def __init__(self, title: str, value: str | None = "", ok: str = "OK") -> None:
+    def __init__(self, title: str, value: str | None = "", ok: str = "OK", allow_empty: bool = False) -> None:
         super().__init__()
         self.title_text, self.value, self.ok = title, value, ok  # value None → confirm-only
+        self.allow_empty = allow_empty  # True → an empty field returns "" (Cancel still returns None)
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="form"):
@@ -34,7 +35,7 @@ class PromptScreen(ModalScreen[str | None]):
             self.dismiss("yes")
             return
         text = self.query_one("#value", Input).value.strip()
-        self.dismiss(text or None)
+        self.dismiss(text if (text or self.allow_empty) else None)
 
     @on(Input.Submitted)
     def submitted(self) -> None:
