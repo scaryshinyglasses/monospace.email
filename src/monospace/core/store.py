@@ -12,7 +12,7 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from monospace.core.tag_store import TAG_SCHEMA, TagStoreMixin
+from monospace.core.tag_store import KEY_SQL, TAG_SCHEMA, TagStoreMixin, migrate_tags
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS folders (
@@ -87,7 +87,7 @@ _ENV_COLS = ("id, account, folder, uid, uidvalidity, message_id, subject, sender
              "flags, size, has_attachments, snippet")
 
 
-_TAG_FILTER = " AND message_id IN (SELECT message_id FROM tags WHERE account=? AND tag=?)"
+_TAG_FILTER = f" AND {KEY_SQL} IN (SELECT msg_key FROM tags WHERE account=? AND tag=?)"
 
 
 def _env(row: sqlite3.Row) -> Envelope:
@@ -107,7 +107,9 @@ class Store(TagStoreMixin):
         with self.lock:
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA foreign_keys=ON")
-            self.db.executescript(SCHEMA + TAG_SCHEMA)
+            self.db.executescript(SCHEMA)
+            migrate_tags(self.db)
+            self.db.executescript(TAG_SCHEMA)
 
     # ---- folders -------------------------------------------------------
     def upsert_folder(self, f: Folder) -> None:
@@ -220,7 +222,8 @@ class Store(TagStoreMixin):
             sql += " AND m.account=?"
             args.append(account)
         if tag:
-            sql += " AND m.message_id IN (SELECT message_id FROM tags WHERE account=m.account AND tag=?)"
+            sql += (" AND (m.message_id || char(31) || m.sender) IN"
+                    " (SELECT msg_key FROM tags WHERE account=m.account AND tag=?)")
             args.append(tag)
         sql += " ORDER BY m.date DESC LIMIT ?"
         args.append(limit)
