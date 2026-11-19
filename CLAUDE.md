@@ -49,8 +49,8 @@ src/monospace/
     imap.py         ImapSession over imapclient (sync; run in threads), UID-based
     smtp.py         aiosmtplib send (password / XOAUTH2)
     store.py        SQLite: folders, messages, bodies, FTS5 `search`, outbox; Envelope.tags filled on every read
-    tag_store.py    TagStoreMixin: `tags(account, message_id, tag, source)` keyed by Message-ID header (survives
-                    moves/draft edits) + `meta` (cached tag backend per folder)
+    tag_store.py    TagStoreMixin: `tags(account, msg_key, tag, source)`, msg_key = Message-ID + sender (survives
+                    moves/draft edits; sender stops a reused Message-ID inheriting tags) + `meta` (tag backend cache)
     tags.py         TagsMixin: hybrid backend per account/folder — gmail (X-GM-LABELS) | keyword (PERMANENTFLAGS \*)
                     | local; `account.tags=local` forces local. normalize_tags refuses \…/$… and system names.
                     `tag:x` search tokens (split_tag_query). sync mirrors server tags (local rows untouched)

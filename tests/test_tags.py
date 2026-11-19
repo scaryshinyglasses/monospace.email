@@ -4,7 +4,9 @@ import pytest
 
 from monospace.core.compose import Draft
 from monospace.core.service import ServiceError
+from monospace.core.store import Store
 from monospace.core.tags import normalize_tags, split_tag_query, tags_from_flags, tags_from_labels
+from tests.fakes import make_raw
 
 
 def _inbox(svc, subject):
@@ -34,6 +36,29 @@ def test_local_backend_survives_move_and_resync(svc, server):
     assert moved.tags == ["later", "work"]  # keyed by Message-ID, not rowid
     assert svc.remove_tags(moved.id, "later").tags == ["work"]
     assert svc.list_tags() == [{"tag": "work", "count": 1}]
+
+
+def test_reused_message_id_from_another_sender_gets_no_tags(svc, server):
+    env = svc.add_tags(_inbox(svc, "Welcome").id, ["approved"])
+    server.deliver("INBOX", make_raw("Pay me", sender="Eve <eve@evil.test>", msgid="<a@x>"))
+    svc.sync()
+    fake = next(e for e in svc.list() if e.subject == "Pay me")
+    assert fake.tags == []
+    assert [e.id for e in svc.tagged(None, "approved")] == [env.id]
+    svc.add_tags(fake.id, "approved")
+    svc.remove_tags(fake.id, "approved")  # untagging the impostor leaves the original alone
+    assert svc.envelope(env.id).tags == ["approved"]
+
+
+def test_pre_release_tag_rows_are_rekeyed(svc, tmp_path):
+    env = svc.add_tags(_inbox(svc, "Welcome").id, ["work"])
+    db = svc.store.db
+    db.executescript("DROP TABLE tags; CREATE TABLE tags (account TEXT NOT NULL, message_id TEXT NOT NULL,"
+                     " tag TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'local',"
+                     " PRIMARY KEY (account, message_id, tag));")
+    db.execute("INSERT INTO tags VALUES ('work', '<a@x>', 'work', 'local')")
+    db.commit()
+    assert Store(tmp_path / "cache.db").get(env.id).tags == ["work"]
 
 
 def test_keyword_backend_writes_flags_and_picks_up_server_tags(svc, server):
