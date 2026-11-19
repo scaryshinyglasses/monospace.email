@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from monospace.core.tag_store import tag_key
+
 if TYPE_CHECKING:
     from monospace.core.imap import ImapSession
     from monospace.core.store import Envelope
@@ -147,9 +149,9 @@ class TagsMixin:
                 elif backend == "gmail":
                     (sess.add_gmail_labels if add else sess.remove_gmail_labels)([env.uid], tags)
         if add:
-            self.store.add_tag_rows(env.account, env.message_id, tags, backend)  # type: ignore[attr-defined]
+            self.store.add_tag_rows(env.account, tag_key(env.message_id, env.sender), tags, backend)  # type: ignore[attr-defined]
         else:
-            self.store.remove_tag_rows(env.account, env.message_id, tags)  # type: ignore[attr-defined]
+            self.store.remove_tag_rows(env.account, tag_key(env.message_id, env.sender), tags)  # type: ignore[attr-defined]
         return self.envelope(msg_id)  # type: ignore[attr-defined]
 
     def list_tags(self, account: str | None = None) -> list[dict]:

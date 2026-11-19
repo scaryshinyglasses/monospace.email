@@ -114,9 +114,9 @@ def sync_server_tags(sess: ImapSession, store: Store, account: str, folder: str,
     labels = sess.gmail_labels(uids) if gmail else {}
     wanted = set(uids)
     rows = []
-    for uid, message_id, flags in store.uid_rows(account, folder):
-        if uid in wanted and message_id:
-            rows.append((message_id, tags_from_labels(labels.get(uid, [])) if gmail else tags_from_flags(flags)))
+    for uid, key, flags in store.uid_rows(account, folder):
+        if uid in wanted and key:
+            rows.append((key, tags_from_labels(labels.get(uid, [])) if gmail else tags_from_flags(flags)))
     store.set_server_tags_bulk(account, rows, "gmail" if gmail else "keyword")
 
 
