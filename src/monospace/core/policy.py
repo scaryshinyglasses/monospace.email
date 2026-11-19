@@ -9,7 +9,10 @@ AI callers (MCP, non-interactive CLI) follow the account's ``ai_send`` setting:
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 Source = Literal["human", "ai"]
 Action = Literal["send", "draft", "queue"]

@@ -273,7 +273,7 @@ class Service(DraftsMixin, FoldersMixin, TagsMixin):
             return self.send_now(acct.name, draft, untrusted=source == "ai")
         if action == "draft":
             res = self.save_draft(acct.name, draft, "ai" if source == "ai" else "human", trusted=True)
-            res.detail += f" (account policy ai_send=draft; a human must send it)"
+            res.detail += " (account policy ai_send=draft; a human must send it)"
             return res
         self._snapshot(draft)
         item = self.store.outbox_add(acct.name, draft.to_dict(), source)
