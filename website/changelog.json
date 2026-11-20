@@ -6,6 +6,11 @@
       "date": null,
       "entries": [
         {
+          "text": "Add email and draft scheduling (TUI, CLI, MCP)",
+          "sha": "4e7783d",
+          "url": "https://github.com/scaryshinyglasses/monospace.email/commit/4e7783d"
+        },
+        {
           "text": "Add Antigravity CLI (agy) support to monospace mcp install",
           "sha": "8eeba42",
           "url": "https://github.com/scaryshinyglasses/monospace.email/commit/8eeba42"

@@ -6,6 +6,7 @@ only adds commits it hasn't seen. Releases: https://github.com/scaryshinyglasses
 
 ## Unreleased
 
+- Add email and draft scheduling (TUI, CLI, MCP) ([4e7783d](https://github.com/scaryshinyglasses/monospace.email/commit/4e7783d))
 - Add Antigravity CLI (agy) support to monospace mcp install ([8eeba42](https://github.com/scaryshinyglasses/monospace.email/commit/8eeba42))
 - Use a fresh Message-ID when replacing Gmail drafts ([2a5e12c](https://github.com/scaryshinyglasses/monospace.email/commit/2a5e12c))
 - Make MCP batch read-only ([8637f82](https://github.com/scaryshinyglasses/monospace.email/commit/8637f82))
