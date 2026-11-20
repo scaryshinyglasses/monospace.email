@@ -79,6 +79,7 @@ A local SQLite cache with full-text search, and new mail pushed over IMAP IDLE.
 
 **Unreleased**
 
+- Add Antigravity CLI (agy) support to monospace mcp install ([8eeba42](https://github.com/scaryshinyglasses/monospace.email/commit/8eeba42))
 - Use a fresh Message-ID when replacing Gmail drafts ([2a5e12c](https://github.com/scaryshinyglasses/monospace.email/commit/2a5e12c))
 - Make MCP batch read-only ([8637f82](https://github.com/scaryshinyglasses/monospace.email/commit/8637f82))
 - MCP: fewer round trips — filters, multi-id tools, where targets, batch ([6516622](https://github.com/scaryshinyglasses/monospace.email/commit/6516622))
@@ -86,7 +87,6 @@ A local SQLite cache with full-text search, and new mail pushed over IMAP IDLE.
 - Key tags on Message-ID plus sender ([97eecee](https://github.com/scaryshinyglasses/monospace.email/commit/97eecee))
 - Generate release notes on every push; add a release workflow ([962c2cd](https://github.com/scaryshinyglasses/monospace.email/commit/962c2cd))
 - Add tags for messages and drafts (TUI, CLI, MCP, search) ([ae74da8](https://github.com/scaryshinyglasses/monospace.email/commit/ae74da8))
-- Serve installer from Monospace website URL ([733a6eb](https://github.com/scaryshinyglasses/monospace.email/commit/733a6eb))
 
 [Full changelog](CHANGELOG.md) · [Releases](https://github.com/scaryshinyglasses/monospace.email/releases)
 <!-- release-notes:end -->
