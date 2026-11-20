@@ -1,13 +1,14 @@
-"""`monospace mcp install claude|codex` — register the MCP server with an AI client.
+"""`monospace mcp install claude|codex|agy` — register the MCP server with an AI client.
 
-Delegates to the client's own CLI (`claude mcp add` / `codex mcp add`) so we never hand-edit
-its config. The server is registered by absolute path: clients launch MCP servers with a
+Delegates to the client's own CLI (`claude mcp add` / `codex mcp add` / `agy mcp add`) so we never
+hand-edit its config. The server is registered by absolute path: clients launch MCP servers with a
 minimal environment, where `~/.local/bin` is often not on PATH.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import shlex
 import shutil
 import subprocess
@@ -17,12 +18,12 @@ from pathlib import Path
 from monospace.cli.output import info
 from monospace.core import paths
 
-CLIENTS = ("claude", "codex")
+CLIENTS = ("claude", "codex", "agy")
 
 
 def add_parsers(mcp: argparse.ArgumentParser) -> None:
     msub = mcp.add_subparsers(dest="mcp_cmd")
-    p = msub.add_parser("install", help="register monospace with Claude Code or Codex")
+    p = msub.add_parser("install", help="register monospace with Claude Code, Codex, or Antigravity CLI (agy)")
     p.add_argument("client", choices=CLIENTS)
     p.add_argument("--name", default="monospace", help="server name in the client (default: monospace)")
     p.add_argument("--print", dest="dry_run", action="store_true",
@@ -48,13 +49,20 @@ def server_command() -> list[str]:
 def client_command(client: str, name: str) -> list[str]:
     if client == "claude":  # user scope: available in every project, not just this directory
         return ["claude", "mcp", "add", "--scope", "user", name, "--", *server_command()]
-    return ["codex", "mcp", "add", name, "--", *server_command()]
+    if client in ("codex", "agy"):
+        return [client, "mcp", "add", name, "--", *server_command()]
+    raise ValueError(f"unknown client: {client}")
 
 
 def codex_toml(name: str) -> str:
     cmd, *args = server_command()
     arg_list = ", ".join(f'"{a}"' for a in args)
     return f'[mcp_servers.{name}]\ncommand = "{cmd}"\nargs = [{arg_list}]\n'
+
+
+def agy_json(name: str) -> str:
+    cmd, *args = server_command()
+    return json.dumps({"mcpServers": {name: {"command": cmd, "args": args}}}, indent=2) + "\n"
 
 
 def _secrets_hint() -> None:
@@ -75,6 +83,9 @@ def run(args: argparse.Namespace) -> int:
         if args.client == "codex":
             info("…or add this to ~/.codex/config.toml:")
             print(codex_toml(args.name))
+        elif args.client == "agy":
+            info("…or add this to ~/.gemini/config/mcp_config.json:")
+            print(agy_json(args.name))
         _secrets_hint()
         return 0 if args.dry_run else 1
     info(f"$ {shlex.join(cmd)}")

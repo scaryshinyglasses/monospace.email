@@ -125,7 +125,7 @@ say ""
 say "  ${B}Next${N}"
 say "    ${C}monospace${N}              open the client — first run adds an account"
 say "    ${C}monospace doctor${N}       check keyring, terminal graphics and connectivity"
-say "    ${C}monospace mcp install claude${N}   let Claude Code use your mail (or: codex)"
+say "    ${C}monospace mcp install claude${N}   let Claude Code use your mail (or: codex, agy)"
 if [ "$OS" = "Linux" ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
   say ""
   say "  ${D}Headless box detected: secrets go to an encrypted file —"

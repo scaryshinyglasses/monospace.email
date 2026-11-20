@@ -32,7 +32,7 @@ src/monospace/
   cli/          main.py (argparse dispatch, TUI default) · mail.py (send/draft/reply: --attach ≠ --inline, --html)
                 manage.py (forward · drafts ls|show|edit|send|rm · folders create|rename|rm) · accounts.py (+ `oauth`)
                 tags.py (`tag add|rm|set|ls|show`; `ls --tag`)
-                outbox.py · agent_dirs.py (interactive-only) · doctor.py · update.py · mcp_setup.py (`mcp install claude|codex`) · daemon.py (systemd/launchd) · output.py (json, interactive())
+                outbox.py · agent_dirs.py (interactive-only) · doctor.py · update.py · mcp_setup.py (`mcp install claude|codex|agy`) · daemon.py (systemd/launchd) · output.py (json, interactive())
   mcp_server.py MCPServer (mcp 2.x — FastMCP was renamed) tools wrapping core.service
   mcp_drafts.py draft edit/send/delete, folder ops, outbox_cancel, InlineImage model, apply_extras
   mcp_read.py   list_messages/search (Where filter → core.query, sync=, include_text=) · read_message (1 or ≤20 ids)

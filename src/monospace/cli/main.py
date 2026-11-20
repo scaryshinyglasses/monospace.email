@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     d = sub.add_parser("doctor", help="check config, secrets, terminal graphics and connectivity")
     d.add_argument("--json", action="store_true")
     d.add_argument("--offline", action="store_true")
-    mcp = sub.add_parser("mcp", help="run the MCP server on stdio (Claude Code, Codex, other AI clients)")
+    mcp = sub.add_parser("mcp", help="run the MCP server on stdio (Claude Code, Codex, Antigravity CLI, other AI clients)")
     cli_mcp_setup.add_parsers(mcp)
     dm = sub.add_parser("daemon", help="background sync loop")
     dm.add_argument("--interval", type=int, default=120)
