@@ -103,8 +103,8 @@ def _dispatch(cmd: str, args: argparse.Namespace) -> int:
         return cli_mail.run(cmd, args, svc)
     if cmd in cli_manage.COMMANDS:
         return cli_manage.run(cmd, args, svc)
-    if cmd == "outbox":
-        return cli_outbox.run(args, svc)
+    if cmd in ("outbox", "schedule"):
+        return cli_outbox.run(args, svc, cmd=cmd)
     if cmd in cli_tags.COMMANDS:
         return cli_tags.run(cmd, args, svc)
     if cmd == "daemon":

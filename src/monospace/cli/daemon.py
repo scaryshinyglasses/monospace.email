@@ -19,6 +19,9 @@ def loop(svc: Service, interval: int, stop: threading.Event | None = None) -> No
     stop = stop or threading.Event()
     info(f"monospace daemon: syncing every {interval}s (Ctrl-C to stop)")
     while not stop.is_set():
+        sent = svc.flush_scheduled()
+        if sent:
+            info(f"{time.strftime('%H:%M:%S')} sent {len(sent)} scheduled message(s)")
         stats = svc.sync()
         for err in stats.errors:
             info(f"error: {err}")

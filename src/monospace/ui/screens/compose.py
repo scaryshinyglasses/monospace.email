@@ -18,19 +18,23 @@ from textual.widgets import Button, Input, Label, Select, Static, TextArea
 from monospace.core import compose as composer
 from monospace.core import sanitize
 from monospace.core.compose import Draft, split_addrs
+from monospace.core.schedule import parse_send_at
+from monospace.ui.screens.prompt import PromptScreen
 
 
 @dataclass
 class ComposeResultData:
     account: str
     draft: Draft
-    action: str  # "send" | "draft"
+    action: str  # "send" | "draft" | "schedule"
     draft_id: int | None = None  # editing this stored draft
+    send_at: str = ""
 
 
 class ComposeScreen(ModalScreen[ComposeResultData | None]):
     BINDINGS = [
         Binding("ctrl+s", "submit('send')", "Send", priority=True),
+        Binding("ctrl+l", "schedule", "Schedule", priority=True),
         Binding("ctrl+d", "submit('draft')", "Save draft", priority=True),
         Binding("escape", "cancel", "Cancel"),
     ]
@@ -51,7 +55,8 @@ class ComposeScreen(ModalScreen[ComposeResultData | None]):
         with Vertical(classes="form"):
             title = ("Edit draft" if self.draft_id else "Reply" if d.in_reply_to
                      else "Forward" if d.subject.startswith("Fwd:") else "New message")
-            yield Static(f"[b]{title}[/b]  [dim]Ctrl+S send · Ctrl+D save draft · Esc cancel · body is Markdown[/]")
+            yield Static(f"[b]{title}[/b]  [dim]Ctrl+S send · Ctrl+L schedule · Ctrl+D save draft · "
+                         "Esc cancel · body is Markdown[/]")
             if len(self.accounts) > 1:
                 yield Select([(f"{n} <{e}>", n) for n, e in self.accounts], value=self.account,
                              allow_blank=False, id="from")
@@ -67,6 +72,8 @@ class ComposeScreen(ModalScreen[ComposeResultData | None]):
             yield Input(inline, id="inline",
                         placeholder="Inline images (in the body): logo.png;width=120;position=top, … "
                                     "or ![Logo](logo.png) in the body")
+            yield Input(d.send_at, id="send_at",
+                        placeholder="Send at (optional): 30m, 2h, tomorrow 09:00, YYYY-MM-DD HH:MM…")
             if self._html_replaced:
                 yield Static("[b $warning]The HTML part differed from the text — showing the HTML's text; "
                              "the HTML will be rebuilt from this body.[/]")
@@ -75,6 +82,7 @@ class ComposeScreen(ModalScreen[ComposeResultData | None]):
             yield Label("", classes="error", id="error")
             with Horizontal(classes="row"):
                 yield Button("Send", variant="primary", id="send")
+                yield Button("Schedule", id="schedule")
                 yield Button("Save draft", id="draft")
                 yield Button("Cancel", id="cancel")
 
@@ -98,12 +106,19 @@ class ComposeScreen(ModalScreen[ComposeResultData | None]):
         missing = [p for p in attachments + [s["path"] for s in inline] if not Path(p).expanduser().is_file()]
         if missing:
             return f"File not found: {', '.join(missing)}"
+        raw_when = self._value("send_at")
+        send_at = ""
+        if raw_when:
+            try:
+                send_at = parse_send_at(raw_when)
+            except Exception as exc:
+                return str(exc)
         body = self.query_one("#body", TextArea).text
         d = Draft(to=split_addrs(self._value("to")), cc=split_addrs(self._value("cc")),
                   bcc=split_addrs(self._value("bcc")), subject=self._value("subject"),
                   body=body, attachments=attachments, signature=self.draft.signature,
                   in_reply_to=self.draft.in_reply_to, references=self.draft.references,
-                  message_id=self.draft.message_id)
+                  message_id=self.draft.message_id, send_at=send_at)
         for spec in inline:
             path = str(Path(spec.pop("path")).expanduser())
             cid = self._cid_by_path.get(path)
@@ -121,18 +136,45 @@ class ComposeScreen(ModalScreen[ComposeResultData | None]):
                                                     set(self.draft.inline_images) - set(d.inline_images))
         return d
 
+    def action_schedule(self) -> None:
+        if self._value("send_at"):
+            self.action_submit("schedule")
+            return
+        result = self._collect()
+        if isinstance(result, str):
+            self.query_one("#error", Label).update(result)
+            return
+        if not result.recipients():
+            self.query_one("#error", Label).update("Add at least one recipient.")
+            return
+
+        def picked(when: str | None) -> None:
+            if when:
+                self.query_one("#send_at", Input).value = when
+                self.action_submit("schedule")
+
+        self.app.push_screen(
+            PromptScreen("Send at (e.g. 30m, 2h, tomorrow 09:00, YYYY-MM-DD HH:MM):", "", "Schedule"),
+            picked,
+        )
+
     def action_submit(self, action: str) -> None:
         result = self._collect()
         if isinstance(result, str):
             self.query_one("#error", Label).update(result)
             return
-        if action == "send" and not result.recipients():
+        if action == "send" and result.send_at:
+            action = "schedule"
+        if action in ("send", "schedule") and not result.recipients():
             self.query_one("#error", Label).update("Add at least one recipient.")
+            return
+        if action == "schedule" and not result.send_at:
+            self.query_one("#error", Label).update("Enter a 'Send at' time to schedule.")
             return
         account = self.account
         if self.query("#from"):
             account = str(self.query_one("#from", Select).value)
-        self.dismiss(ComposeResultData(account, result, action, self.draft_id))
+        self.dismiss(ComposeResultData(account, result, action, self.draft_id, result.send_at))
 
     def action_cancel(self) -> None:
         self.dismiss(None)
@@ -141,5 +183,7 @@ class ComposeScreen(ModalScreen[ComposeResultData | None]):
     def pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel":
             self.action_cancel()
+        elif event.button.id == "schedule":
+            self.action_schedule()
         elif event.button.id in ("send", "draft"):
             self.action_submit(event.button.id)

@@ -55,8 +55,9 @@ class Watcher:
                 backoff = min(backoff * 2, BACKOFF_MAX)
 
     def _sync(self, sess, acct: Account) -> None:  # type: ignore[no-untyped-def]
+        sent = self.svc.flush_scheduled()
         before = {f.name for f in self.svc.store.folders(acct.name)}
         syncmod.sync_folder_list(sess, self.svc.store, acct.name)
         new, removed = syncmod.sync_folder(sess, self.svc.store, acct.name, "INBOX")
-        if new or removed or not before:
+        if new or removed or sent or not before:
             self.on_change(acct.name, "INBOX")

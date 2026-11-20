@@ -22,6 +22,8 @@ def header_markup(pm: ParsedMessage, tags: list[str] | None = None) -> str:
         lines.append(f"[dim]Cc[/]    {escape(', '.join(pm.cc))}")
     if pm.date:
         lines.append(f"[dim]Date[/]  {escape(pm.date[:16].replace('T', ' '))}")
+    if pm.send_at:
+        lines.append(f"[dim]Send[/]  [$accent]{escape(pm.send_at[:16].replace('T', ' '))}[/]")
     if tags:
         lines.append("[dim]Tags[/]  " + "  ".join(f"[$accent]#{escape(t)}[/]" for t in tags))
     return "\n".join(lines)

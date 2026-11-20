@@ -32,8 +32,17 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(subject, sender, recipients
   tokenize='unicode61 remove_diacritics 2');
 CREATE TABLE IF NOT EXISTS outbox (
   id INTEGER PRIMARY KEY, account TEXT NOT NULL, created TEXT DEFAULT (datetime('now')),
-  draft TEXT NOT NULL, source TEXT DEFAULT 'ai', status TEXT DEFAULT 'pending', error TEXT DEFAULT '');
+  draft TEXT NOT NULL, source TEXT DEFAULT 'ai', status TEXT DEFAULT 'pending', error TEXT DEFAULT '',
+  send_at TEXT DEFAULT '', draft_message_id TEXT DEFAULT '');
 """
+
+
+def _migrate_outbox(db: sqlite3.Connection) -> None:
+    cols = {r[1] for r in db.execute("PRAGMA table_info(outbox)")}
+    if "send_at" not in cols:
+        db.execute("ALTER TABLE outbox ADD COLUMN send_at TEXT DEFAULT ''")
+    if "draft_message_id" not in cols:
+        db.execute("ALTER TABLE outbox ADD COLUMN draft_message_id TEXT DEFAULT ''")
 
 
 @dataclass
@@ -108,6 +117,7 @@ class Store(TagStoreMixin):
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA foreign_keys=ON")
             self.db.executescript(SCHEMA)
+            _migrate_outbox(self.db)
             migrate_tags(self.db)
             self.db.executescript(TAG_SCHEMA)
 
@@ -270,24 +280,52 @@ class Store(TagStoreMixin):
         return bytes(row[0]) if row else None
 
     # ---- outbox --------------------------------------------------------
-    def outbox_add(self, account: str, draft: dict, source: str = "ai") -> int:
+    def outbox_add(self, account: str, draft: dict, source: str = "ai", *,
+                   status: str = "pending", send_at: str = "", draft_message_id: str = "") -> int:
         with self.lock:
-            cur = self.db.execute("INSERT INTO outbox(account, draft, source) VALUES(?,?,?)",
-                                  (account, json.dumps(draft), source))
+            cur = self.db.execute(
+                "INSERT INTO outbox(account, draft, source, status, send_at, draft_message_id) VALUES(?,?,?,?,?,?)",
+                (account, json.dumps(draft), source, status, send_at, draft_message_id))
             return int(cur.lastrowid or 0)
 
-    def outbox(self, status: str | None = "pending") -> list[dict]:
-        sql, args = "SELECT * FROM outbox", []
-        if status:
+    def outbox(self, status: str | tuple[str, ...] | None = "pending") -> list[dict]:
+        sql, args = "SELECT * FROM outbox", []  # type: str, list[object]
+        if isinstance(status, tuple):
+            marks = ",".join("?" * len(status))
+            sql, args = f"{sql} WHERE status IN ({marks})", list(status)
+        elif status:
             sql, args = sql + " WHERE status=?", [status]
         with self.lock:
-            rows = self.db.execute(sql + " ORDER BY id", args).fetchall()
+            rows = self.db.execute(sql + " ORDER BY CASE WHEN send_at!='' THEN send_at ELSE created END, id",
+                                   args).fetchall()
         return [{**dict(r), "draft": json.loads(r["draft"])} for r in rows]
 
     def outbox_get(self, item_id: int) -> dict | None:
         with self.lock:
             row = self.db.execute("SELECT * FROM outbox WHERE id=?", (item_id,)).fetchone()
         return {**dict(row), "draft": json.loads(row["draft"])} if row else None
+
+    def outbox_by_draft(self, account: str, draft_message_id: str) -> dict | None:
+        if not draft_message_id:
+            return None
+        with self.lock:
+            row = self.db.execute(
+                "SELECT * FROM outbox WHERE account=? AND draft_message_id=? AND status IN ('pending','scheduled')"
+                " ORDER BY id DESC LIMIT 1", (account, draft_message_id)).fetchone()
+        return {**dict(row), "draft": json.loads(row["draft"])} if row else None
+
+    def outbox_cancel_by_draft(self, account: str, draft_message_id: str) -> None:
+        if not draft_message_id:
+            return
+        with self.lock:
+            self.db.execute(
+                "UPDATE outbox SET status='cancelled' WHERE account=? AND draft_message_id=?"
+                " AND status IN ('pending','scheduled')", (account, draft_message_id))
+
+    def outbox_reschedule(self, item_id: int, send_at: str, draft: dict, draft_message_id: str = "") -> None:
+        with self.lock:
+            self.db.execute("UPDATE outbox SET send_at=?, draft=?, draft_message_id=?, error='' WHERE id=?",
+                            (send_at, json.dumps(draft), draft_message_id, item_id))
 
     def outbox_set(self, item_id: int, status: str, error: str = "") -> None:
         with self.lock:

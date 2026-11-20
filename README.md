@@ -142,15 +142,15 @@ monospace update     # installs the latest version (the app tells you when one e
 | `u` | toggle unread | `*` | toggle flag |
 | `/` | search all mail | `Esc` | back |
 | `i` | load remote images | `H` | HTML ↔ plain text |
-| `Ctrl+R` · `g` | sync now | `O` | AI outbox |
+| `Ctrl+R` · `g` | sync now | `O` | AI outbox & scheduled |
 | `A` | add account | `q` | quit |
 | `e` | edit the selected draft | `N` · `E` · `X` | new · rename · delete folder |
-| `t` | tag the message or draft | | |
+| `t` | tag the message or draft | `S` | schedule the selected draft |
 
 In the composer, **Attachments** are files the recipient downloads and **Inline images** show in the body.
 Write an inline image as `logo.png;width=120;position=top`, or place it yourself with `![Logo](logo.png)`.
 
-In compose, `Ctrl+S` sends and `Ctrl+D` saves a draft.
+In compose, `Ctrl+S` sends, `Ctrl+L` schedules (`30m`, `2h`, `tomorrow 09:00`, `YYYY-MM-DD HH:MM`), and `Ctrl+D` saves a draft.
 
 ### Tags
 
@@ -234,14 +234,15 @@ Then ask: *"Summarise my unread mail and draft replies to anything from Priya."*
 ```
 
 **Tools:** `list_accounts` `sync` `list_folders` `list_messages` `search` `read_message` `save_attachment`
-`send_email` `create_draft` `reply` `forward` `mark` `move` `outbox_list` `outbox_cancel` `batch` · drafts: `get_draft`
+`send_email` `create_draft` `reply` `forward` `mark` `move` `outbox_list` `schedule_list` `reschedule` `outbox_cancel` `batch` · drafts: `get_draft`
 `update_draft` `send_draft` `delete_draft` · folders: `create_folder` `rename_folder` `delete_folder` · tags:
 `tag_message` `untag_message` `list_tags`. Built for few round trips: `list_messages`/`search` filter by sender,
 recipient, subject, dates (`since: "7d"`), flags, attachments, tags or `folder: "all"`, can `sync` first and
 `include_text` inline; `read_message`/`mark`/`move`/tag tools take a list of ids (`mark` and tags also a `where`
 filter with `dry_run`); `batch` stacks up to 20 read-only calls in one request.
 
-Compose tools take `cc`/`bcc`, a markdown `body` or a raw `html_body`, and two kinds of file:
+Compose and draft tools take `cc`/`bcc`, a markdown `body` or a raw `html_body`, an optional `send_at`
+(`"30m"`, `"2h"`, `"tomorrow 09:00"`, `"2026-11-21T09:00"`) to schedule future delivery, and two kinds of file:
 **`attachments`** (downloadable files) and **`inline_images`** (shown inside the body, e.g. a logo).
 An inline image is a path or `{path, alt, width, height, position: top|bottom, align, link}`. To place it
 yourself, reference it as `![Logo](logo.png)` or `<img src="cid:logo.png">`. `update_draft` edits a saved
@@ -269,7 +270,9 @@ monospace send --to bob@example.com --subject Hi --body "**Hello**" --attach ~/n
                --inline "logo.png;width=120;position=top"     # --html page.html to send your own HTML
 monospace drafts ls                    # then: drafts show 12 · drafts edit 12 --subject … --inline logo.png
 monospace drafts edit 12 --editor      # body in $EDITOR;  --detach / --remove-inline NAME drop parts
-monospace drafts send 12               # · drafts rm 12
+monospace drafts send 12               # · drafts schedule 12 "tomorrow 09:00" · drafts unschedule 12 · drafts rm 12
+monospace send --to bob@example.com --subject Hi --body "Later" --at "tomorrow 09:00"
+monospace schedule list                # · schedule reschedule 3 "2h" · schedule cancel 3 · schedule run
 monospace forward 42 --to ana@example.com      # carries the attachments (--no-attachments to skip)
 monospace folders create Receipts      # · folders rename A B · folders rm A (empty only)
 monospace tag add 42 work "big client" # · tag rm 42 work · tag set 42 a,b · tag ls · tag show work

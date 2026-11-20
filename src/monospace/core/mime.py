@@ -39,6 +39,7 @@ class ParsedMessage:
     message_id: str = ""
     in_reply_to: str = ""
     references: str = ""
+    send_at: str = ""  # X-Monospace-Send-At header on saved drafts
     text: str = ""
     html: str = ""
     inline: dict[str, Part] = field(default_factory=dict)  # content-id (no <>) -> part
@@ -83,6 +84,7 @@ def parse(raw: bytes) -> ParsedMessage:
         message_id=str(msg.get("message-id", "") or "").strip(),
         in_reply_to=str(msg.get("in-reply-to", "") or "").strip(),
         references=str(msg.get("references", "") or "").strip(),
+        send_at=str(msg.get("x-monospace-send-at", "") or "").strip(),
     )
     for part in msg.walk():
         if part.is_multipart():

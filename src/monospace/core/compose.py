@@ -35,6 +35,7 @@ class Draft:
     inline_layout: dict[str, dict] = field(default_factory=dict)
     message_id: str = ""  # reuse (draft edits); empty → a fresh one
     signature: bool = True  # False when body/html_body already contain it (an edited draft)
+    send_at: str = ""  # ISO-8601 UTC timestamp when scheduled (persisted on drafts, not sent headers)
 
     def recipients(self) -> list[str]:
         return [addr for _, addr in getaddresses(self.to + self.cc + self.bcc) if addr]

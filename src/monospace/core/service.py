@@ -17,6 +17,7 @@ from monospace.core.drafts import DraftsMixin
 from monospace.core.folders import FoldersMixin
 from monospace.core.imap import ImapSession
 from monospace.core.query import QueryMixin
+from monospace.core.schedule import ScheduleMixin, parse_send_at
 from monospace.core.store import Envelope, Store
 from monospace.core.tags import TagsMixin, split_tag_query
 
@@ -30,22 +31,26 @@ class ServiceError(Exception):
 
 @dataclass
 class SendResult:
-    status: str  # sent | drafted | queued
+    status: str  # sent | drafted | queued | scheduled
     account: str
     detail: str = ""
     outbox_id: int | None = None
     draft_id: int | None = None  # local id of the saved draft (status "drafted")
+    send_at: str | None = None  # ISO-8601 UTC timestamp when scheduled
 
     def to_dict(self) -> dict:
-        return {"status": self.status, "account": self.account, "detail": self.detail,
-                "outbox_id": self.outbox_id, "draft_id": self.draft_id}
+        d = {"status": self.status, "account": self.account, "detail": self.detail,
+             "outbox_id": self.outbox_id, "draft_id": self.draft_id}
+        if self.send_at:
+            d["send_at"] = self.send_at
+        return d
 
 
 def _default_sender(acct: Account, cred: tokens.Credential | None, msg: EmailMessage, rcpts: list[str]) -> None:
     asyncio.run(smtp.send(acct, cred, msg, rcpts))
 
 
-class Service(DraftsMixin, FoldersMixin, TagsMixin, QueryMixin):
+class Service(DraftsMixin, FoldersMixin, TagsMixin, QueryMixin, ScheduleMixin):
     def __init__(self, cfg: Config | None = None, store: Store | None = None, *,
                  session_factory: SessionFactory = ImapSession, sender: Sender = _default_sender,
                  credentials: Callable[[Account], tokens.Credential] | None = None) -> None:
@@ -85,6 +90,7 @@ class Service(DraftsMixin, FoldersMixin, TagsMixin, QueryMixin):
 
     def sync(self, account: str | None = None, folders: list[str] | None = None,
              all_folders: bool = False) -> syncmod.SyncStats:
+        self.flush_scheduled()
         stats = syncmod.SyncStats()
         targets = [self.account(account)] if account else list(self.cfg.accounts)
         for acct in targets:
@@ -206,6 +212,8 @@ class Service(DraftsMixin, FoldersMixin, TagsMixin, QueryMixin):
             raise ServiceError(f"attachment error: {exc}") from exc
         if for_draft and draft.bcc:
             msg["Bcc"] = ", ".join(draft.bcc)
+        if for_draft and draft.send_at:
+            msg["X-Monospace-Send-At"] = draft.send_at
         return msg
 
     def _guard_ai(self, draft: Draft) -> None:
@@ -232,15 +240,19 @@ class Service(DraftsMixin, FoldersMixin, TagsMixin, QueryMixin):
         draft.inline_images = {cid: copy(src) for cid, src in draft.inline_images.items()}
 
     def save_draft(self, account: str | None, draft: Draft, source: policy.Source = "human", *,
-                   trusted: bool = False) -> SendResult:
+                   trusted: bool = False, send_at: str | None = None) -> SendResult:
         acct = self.account(account)
+        raw_when = send_at if send_at is not None else draft.send_at
+        when = parse_send_at(raw_when) if raw_when else ""
+        draft.send_at = when
         if source == "ai" and not trusted:
             self._guard_ai(draft)
         msg = self._build(acct, draft, for_draft=True, untrusted=source == "ai")
         folder = acct.folder("drafts")
         with self.session(acct) as sess:
             sess.append(folder, msg.as_bytes(), ["\\Draft", "\\Seen"])
-        return self._drafted(acct, msg["Message-ID"], f"saved to {folder}")
+        res = self._drafted(acct, msg["Message-ID"], f"saved to {folder}")
+        return self._sync_draft_schedule(acct, str(msg["Message-ID"]), draft, source, when, res)
 
     def send_now(self, account: str | None, draft: Draft, *, untrusted: bool = False) -> SendResult:
         acct = self.account(account)
@@ -258,11 +270,14 @@ class Service(DraftsMixin, FoldersMixin, TagsMixin, QueryMixin):
         return SendResult("sent", acct.name, f"sent to {', '.join(rcpts)}")
 
     def submit(self, account: str | None, draft: Draft, source: policy.Source, *,
-               trusted: bool = False) -> SendResult:
+               trusted: bool = False, send_at: str | None = None) -> SendResult:
         """``trusted`` = attachments were materialized by us (e.g. from a stored draft), not named by an agent."""
         acct = self.account(account)
         if not draft.recipients():
             raise ServiceError("no recipients")
+        raw_when = send_at if send_at is not None else draft.send_at
+        when = parse_send_at(raw_when) if raw_when else ""
+        draft.send_at = when
         if source == "ai" and not trusted:
             self._guard_ai(draft)
         if source == "ai" and draft.html_body:
@@ -271,28 +286,38 @@ class Service(DraftsMixin, FoldersMixin, TagsMixin, QueryMixin):
             draft.body = compose.review(Draft(html_body=draft.html_body, signature=False))
         action = policy.decide(acct.ai_send, source)
         if action == "send":
-            return self.send_now(acct.name, draft, untrusted=source == "ai")
+            if not when:
+                return self.send_now(acct.name, draft, untrusted=source == "ai")
+            self._snapshot(draft)
+            item = self.store.outbox_add(acct.name, draft.to_dict(), source, status="scheduled", send_at=when)
+            return SendResult("scheduled", acct.name, f"scheduled for {when} (#{item})", outbox_id=item, send_at=when)
         if action == "draft":
-            res = self.save_draft(acct.name, draft, "ai" if source == "ai" else "human", trusted=True)
+            res = self.save_draft(acct.name, draft, "ai" if source == "ai" else "human", trusted=True,
+                                  send_at=when or None)
             res.detail += " (account policy ai_send=draft; a human must send it)"
             return res
         self._snapshot(draft)
-        item = self.store.outbox_add(acct.name, draft.to_dict(), source)
+        item = self.store.outbox_add(acct.name, draft.to_dict(), source, status="pending", send_at=when)
+        note = f" (scheduled for {when})" if when else ""
         return SendResult("queued", acct.name,
-                          f"awaiting approval: `monospace outbox approve {item}` or the TUI outbox (O)", item)
+                          f"awaiting approval: `monospace outbox approve {item}` or the TUI outbox (O){note}",
+                          item, send_at=when or None)
 
     def reply(self, msg_id: int, body: str, *, reply_all: bool = False, source: policy.Source = "human",
-              send: bool = True, extras: Callable[[Draft], Draft] | None = None) -> SendResult:
+              send: bool = True, extras: Callable[[Draft], Draft] | None = None,
+              send_at: str | None = None) -> SendResult:
         env, pm = self.read(msg_id)
         acct = self.account(env.account)
         draft = compose.reply(pm, body, acct.email, reply_all=reply_all)
         if extras:
             draft = extras(draft)
-        return self.submit(acct.name, draft, source) if send else self.save_draft(acct.name, draft, source)
+        if send:
+            return self.submit(acct.name, draft, source, send_at=send_at)
+        return self.save_draft(acct.name, draft, source, send_at=send_at)
 
     def forward(self, msg_id: int, body: str, to: list[str], *, source: policy.Source = "human",
                 send: bool = True, extras: Callable[[Draft], Draft] | None = None,
-                include_attachments: bool = False) -> SendResult:
+                include_attachments: bool = False, send_at: str | None = None) -> SendResult:
         env, pm = self.read(msg_id)
         draft = compose.forward(pm, body, to)
         if extras:
@@ -302,43 +327,5 @@ class Service(DraftsMixin, FoldersMixin, TagsMixin, QueryMixin):
         if include_attachments and pm.attachments:
             draft.attachments += self.materialize(pm.attachments)
         if send:
-            return self.submit(env.account, draft, source, trusted=True)
-        return self.save_draft(env.account, draft, source, trusted=True)
-
-    # ---- outbox --------------------------------------------------------
-    def outbox(self) -> list[dict]:
-        return self.store.outbox("pending")
-
-    def outbox_approve(self, item_id: int) -> SendResult:
-        item = self.store.outbox_get(item_id)
-        if not item or item["status"] != "pending":
-            raise ServiceError(f"no pending outbox item {item_id}")
-        if item["source"] == "ai":  # only send exactly the snapshotted files that were reviewed
-            snap = (paths.data_dir() / "outbox-files").resolve()
-            for f in item["draft"].get("attachments", []):
-                if not Path(f).resolve().is_relative_to(snap):
-                    raise ServiceError(f"refusing outbox item {item_id}: attachment outside snapshot dir: {f}")
-        try:
-            res = self.send_now(item["account"], Draft.from_dict(item["draft"]), untrusted=item["source"] == "ai")
-        except Exception as exc:
-            self.store.outbox_set(item_id, "pending", str(exc))
-            raise
-        self.store.outbox_set(item_id, "sent")
-        return res
-
-    def outbox_review(self, item: dict) -> str:
-        """What the queued message will show recipients, as plain text (sanitized for terminals)."""
-        acct = self.account(item["account"])
-        return compose.review(Draft.from_dict(item["draft"]), signature=acct.signature)
-
-    def outbox_cancel(self, item_id: int) -> None:
-        """Withdraw a pending item (AI callers may do this — it never sends anything)."""
-        item = self.store.outbox_get(item_id)
-        if not item or item["status"] != "pending":
-            raise ServiceError(f"no pending outbox item {item_id}")
-        self.store.outbox_set(item_id, "cancelled")
-
-    def outbox_reject(self, item_id: int) -> None:
-        if not self.store.outbox_get(item_id):
-            raise ServiceError(f"no outbox item {item_id}")
-        self.store.outbox_set(item_id, "rejected")
+            return self.submit(env.account, draft, source, trusted=True, send_at=send_at)
+        return self.save_draft(env.account, draft, source, trusted=True, send_at=send_at)

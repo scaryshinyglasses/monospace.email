@@ -52,6 +52,8 @@ class MonospaceApp(App):
             self.open_account_wizard()
         else:
             self.start_watcher()
+        if self._watch:
+            self.set_interval(15, self.flush_scheduled)
         if self.svc.cfg.settings.check_updates:
             self.check_for_update()
 
@@ -150,13 +152,20 @@ class MonospaceApp(App):
     @work(thread=True, group="send")
     def deliver(self, result: ComposeResultData) -> None:
         try:
+            when = result.send_at or result.draft.send_at or None
             if result.action == "draft" and result.draft_id:
-                res = self.svc.replace_draft(result.draft_id, result.draft)
+                res = self.svc.replace_draft(result.draft_id, result.draft, send_at=result.send_at)
             elif result.action == "draft":
-                res = self.svc.save_draft(result.account, result.draft)
+                res = self.svc.save_draft(result.account, result.draft, send_at=when)
+            elif result.action == "schedule" or when:
+                if result.draft_id:
+                    res = self.svc.replace_draft(result.draft_id, result.draft, send_at=when)
+                else:
+                    res = self.svc.submit(result.account, result.draft, "human", send_at=when)
             else:
                 if result.draft_id:
                     result.draft.message_id = ""  # the sent copy gets its own Message-ID
+                    result.draft.send_at = ""
                 res = self.svc.send_now(result.account, result.draft)  # a human pressed Send
                 if result.draft_id:
                     self.svc.delete_draft(result.draft_id)
@@ -169,6 +178,23 @@ class MonospaceApp(App):
                                                 [(a.name, a.email) for a in self.svc.cfg.accounts],
                                                 result.draft_id),
                                   self._compose_done)
+
+    @work(thread=True, group="schedule")
+    def schedule_draft(self, msg_id: int, send_at: str) -> None:
+        try:
+            res = self.svc.schedule_draft(msg_id, send_at)
+            self.call_from_thread(self.notify, f"✓ {res.status}: {res.detail}")
+            self.call_from_thread(self._refresh_main)
+        except Exception as exc:
+            self.call_from_thread(self.notify, f"Could not schedule: {exc}", severity="error")
+
+    @work(thread=True, group="schedule-flush", exit_on_error=False)
+    def flush_scheduled(self) -> None:
+        sent = self.svc.flush_scheduled()
+        if sent:
+            for res in sent:
+                self.call_from_thread(self.notify, f"✓ Sent scheduled mail ({res.detail})")
+            self.call_from_thread(self._refresh_main)
 
     @work(thread=True, group="attachment")
     def save_attachment(self, msg_id: int, index: int) -> None:

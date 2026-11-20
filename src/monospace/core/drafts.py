@@ -17,6 +17,7 @@ from monospace.core import compose, mime, paths, platform, policy, sanitize
 from monospace.core import sync as syncmod
 from monospace.core.compose import Draft
 from monospace.core.config import Account
+from monospace.core.schedule import parse_send_at
 from monospace.core.store import Envelope
 
 if TYPE_CHECKING:
@@ -71,14 +72,17 @@ class DraftsMixin:
 
     def load_draft(self, msg_id: int) -> tuple[Draft, mime.ParsedMessage]:
         """The stored draft as an editable ``Draft`` (attachments/inline images materialized to files)."""
-        self._draft_env(msg_id)
+        env, _acct = self._draft_env(msg_id)
         cleanup_snapshots()
         _env, pm = self.read(msg_id)
+        linked = self.store.outbox_by_draft(env.account, pm.message_id)  # type: ignore[attr-defined]
+        send_at = (linked.get("send_at") if linked else "") or pm.send_at
         snap = _snapshot_dir() if (pm.attachments or pm.inline) else None
         draft = Draft(
             to=pm.to, cc=pm.cc, bcc=pm.bcc, subject=pm.subject, body=pm.text, html_body=pm.html,
             in_reply_to=pm.in_reply_to, references=pm.references, message_id=pm.message_id,
             signature=False,  # the stored text/HTML already contain it
+            send_at=send_at,
             attachments=[_write(snap, p) for p in pm.attachments] if snap else [],
             inline_images={cid: _write(snap, p) for cid, p in pm.inline.items()} if snap else {},
         )
@@ -87,10 +91,14 @@ class DraftsMixin:
     def get_draft(self, msg_id: int) -> dict:
         env, acct = self._draft_env(msg_id)
         _env, pm = self.read(msg_id)
+        linked = self.store.outbox_by_draft(acct.name, pm.message_id)  # type: ignore[attr-defined]
+        send_at = (linked.get("send_at") if linked else "") or pm.send_at
         return {
             "id": env.id, "account": acct.name, "to": pm.to, "cc": pm.cc, "bcc": pm.bcc,
             "subject": pm.subject, "body": _strip_signature(pm.text, acct.signature), "html": pm.html,
             "html_matches_body": not pm.html or sanitize.html_matches_text(pm.html, pm.text),
+            "send_at": send_at or None,
+            "outbox_id": linked["id"] if linked else None,
             "attachments": [{"filename": p.filename, "content_type": p.content_type, "size": p.size}
                             for p in pm.attachments],
             "inline_images": [{"cid": cid, "filename": p.filename, "content_type": p.content_type,
@@ -108,7 +116,8 @@ class DraftsMixin:
                      body: str | None = None, html_body: str | None = None,
                      add_attachments: list[str] | None = None, remove_attachments: list[str] | None = None,
                      add_inline_images: list | None = None,
-                     remove_inline_images: list[str] | None = None) -> "SendResult":
+                     remove_inline_images: list[str] | None = None,
+                     send_at: str | None = None) -> "SendResult":
         """Replace a draft. Omitted fields are kept. Giving ``body`` without ``html_body`` re-renders
         the HTML from the markdown (inline images that it doesn't reference are appended at the end)."""
         from monospace.core.service import ServiceError
@@ -125,6 +134,8 @@ class DraftsMixin:
             new_files = policy.check_agent_attachments(new_files, allowed) if new_files else []
             new_inline = policy.check_agent_attachments(new_inline, allowed) if new_inline else []
         draft, pm = self.load_draft(msg_id)
+        if send_at is not None:
+            draft.send_at = parse_send_at(send_at) if send_at.strip() else ""
         draft.body = _strip_signature(pm.text, acct.signature)
         draft.signature = True  # re-added below unless we keep the stored HTML verbatim
         for name, value in (("to", to), ("cc", cc), ("bcc", bcc)):
@@ -158,11 +169,16 @@ class DraftsMixin:
         self.store.delete_uids(env.account, env.folder, [env.uid])  # type: ignore[attr-defined]
         res = self._drafted(acct, msg["Message-ID"], f"updated draft in {env.folder}")
         self.carry_tags(env, res.draft_id)  # type: ignore[attr-defined]
-        return res
+        return self._sync_draft_schedule(  # type: ignore[attr-defined]
+            acct, str(msg["Message-ID"]), draft, source, draft.send_at, res, old_message_id=env.message_id
+        )
 
-    def replace_draft(self, msg_id: int, draft: Draft, source: policy.Source = "human") -> "SendResult":
+    def replace_draft(self, msg_id: int, draft: Draft, source: policy.Source = "human", *,
+                      send_at: str | None = None) -> "SendResult":
         """Swap a stored draft for a fully edited one (the TUI/CLI editor path)."""
         env, acct = self._draft_env(msg_id)
+        raw_when = send_at if send_at is not None else draft.send_at
+        draft.send_at = parse_send_at(raw_when) if (raw_when and raw_when.strip()) else ""
         if source == "ai":
             self._guard_ai(draft)  # type: ignore[attr-defined]
         msg = self._build_replacement(acct, draft, source)
@@ -173,26 +189,34 @@ class DraftsMixin:
         self.store.delete_uids(env.account, env.folder, [env.uid])  # type: ignore[attr-defined]
         res = self._drafted(acct, msg["Message-ID"], f"updated draft in {env.folder}")
         self.carry_tags(env, res.draft_id)  # type: ignore[attr-defined]
-        return res
+        return self._sync_draft_schedule(  # type: ignore[attr-defined]
+            acct, str(msg["Message-ID"]), draft, source, draft.send_at, res, old_message_id=env.message_id
+        )
 
     def delete_draft(self, msg_id: int) -> None:
         env, acct = self._draft_env(msg_id)
+        self.store.outbox_cancel_by_draft(env.account, env.message_id)  # type: ignore[attr-defined]
         with self.session(acct) as sess:  # type: ignore[attr-defined]
             sess.select(env.folder)
             sess.delete([env.uid])
         self.store.delete_uids(env.account, env.folder, [env.uid])  # type: ignore[attr-defined]
         self.store.recount(env.account, env.folder)  # type: ignore[attr-defined]
 
-    def send_draft(self, msg_id: int, source: policy.Source = "human") -> "SendResult":
-        """Send a stored draft (AI callers obey ``ai_send``). The draft is removed once actually sent."""
+    def send_draft(self, msg_id: int, source: policy.Source = "human", *,
+                   send_at: str | None = None) -> "SendResult":
+        """Send or schedule a stored draft (AI callers obey ``ai_send``). Removed once actually sent."""
         from monospace.core.service import SendResult
 
+        if send_at:
+            return self.schedule_draft(msg_id, send_at, source)  # type: ignore[attr-defined]
         env, acct = self._draft_env(msg_id)
         if source == "ai" and policy.decide(acct.ai_send, source) == "draft":
             return SendResult("drafted", acct.name, f"left in {env.folder}: account policy ai_send=draft, "
                               "so a human must send it", draft_id=env.id)
         draft, _pm = self.load_draft(msg_id)
         draft.message_id = ""  # the sent copy gets its own Message-ID
+        draft.send_at = ""  # sending now, even if the draft had a prior send_at header
+        self.store.outbox_cancel_by_draft(env.account, env.message_id)  # type: ignore[attr-defined]
         res = self.submit(acct.name, draft, source, trusted=True)  # type: ignore[attr-defined]
         if res.status == "sent":
             self.delete_draft(msg_id)

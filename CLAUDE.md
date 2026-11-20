@@ -29,12 +29,12 @@ Textual SVG screenshots of a FakeServer demo mailbox.
 
 ```
 src/monospace/
-  cli/          main.py (argparse dispatch, TUI default) · mail.py (send/draft/reply: --attach ≠ --inline, --html)
-                manage.py (forward · drafts ls|show|edit|send|rm · folders create|rename|rm) · accounts.py (+ `oauth`)
+  cli/          main.py (argparse dispatch, TUI default) · mail.py (send/draft/reply: --attach ≠ --inline, --html, --at)
+                manage.py (forward · drafts ls|show|edit|send|schedule|unschedule|rm · folders create|rename|rm) · accounts.py (+ `oauth`)
                 tags.py (`tag add|rm|set|ls|show`; `ls --tag`)
-                outbox.py · agent_dirs.py (interactive-only) · doctor.py · update.py · mcp_setup.py (`mcp install claude|codex|agy`) · daemon.py (systemd/launchd) · output.py (json, interactive())
-  mcp_server.py MCPServer (mcp 2.x — FastMCP was renamed) tools wrapping core.service
-  mcp_drafts.py draft edit/send/delete, folder ops, outbox_cancel, InlineImage model, apply_extras
+                outbox.py (`outbox` + `schedule`) · agent_dirs.py (interactive-only) · doctor.py · update.py · mcp_setup.py (`mcp install claude|codex|agy`) · daemon.py (systemd/launchd) · output.py (json, interactive())
+  mcp_server.py MCPServer (mcp 2.x — FastMCP was renamed) tools wrapping core.service (+ `send_at`, `schedule_list`)
+  mcp_drafts.py draft edit/send/delete (+ `send_at`), `reschedule`, folder ops, outbox_cancel, InlineImage model, apply_extras
   mcp_read.py   list_messages/search (Where filter → core.query, sync=, include_text=) · read_message (1 or ≤20 ids)
   mcp_triage.py mark/move/tag_message/untag_message (id | [ids] ≤100; mark+tags also `where` + dry_run) · list_tags
   mcp_batch.py  batch: ≤20 READ-ONLY calls (tools' own readOnlyHint) via server.call_tool, no result references
@@ -66,6 +66,7 @@ src/monospace/
     drafts.py       DraftsMixin: get/update/delete/send drafts (Drafts folder only). Edit = APPEND new
                     (same Message-ID) + expunge old; existing parts materialized to data/draft-files/
     folders.py      FoldersMixin: create/rename/delete (delete: empty, non-system only)
+    schedule.py     ScheduleMixin + parse_send_at: scheduled emails & drafts (`outbox` status='scheduled'|'pending', `X-Monospace-Send-At` on drafts, `flush_scheduled`)
     policy.py       ai_send: draft | confirm(queue) | allow — applies to source="ai" only; agent file roots
     sanitize.py     agent HTML allowlist (built with untrusted=True) · review_text for approval UIs · terminal_safe
     service.py      THE façade (blocking). TUI, CLI and MCP all go through it.

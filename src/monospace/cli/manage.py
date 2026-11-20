@@ -31,10 +31,12 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--no-attachments", action="store_true", help="don't carry the original's attachments")
     add_content_args(p)
     p.add_argument("--draft", action="store_true", help="save to Drafts instead of sending")
+    p.add_argument("--at", "--send-at", dest="send_at", metavar="WHEN",
+                   help="schedule send time (e.g. '30m', '2h', 'tomorrow 09:00', '2026-11-21T09:00')")
     p.add_argument("--yes", "-y", action="store_true")
     p.add_argument("--json", action="store_true")
 
-    p = sub.add_parser("drafts", help="list, show, edit, send or delete drafts")
+    p = sub.add_parser("drafts", help="list, show, edit, send, schedule or delete drafts")
     ds = p.add_subparsers(dest="drafts_cmd")
     x = ds.add_parser("ls", help="list drafts")
     x.add_argument("--limit", type=int, default=30)
@@ -54,12 +56,28 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     x.add_argument("--detach", action="append", default=[], metavar="NAME", help="remove an attachment by name")
     x.add_argument("--remove-inline", action="append", default=[], metavar="NAME",
                    help="remove an inline image by file name or cid")
+    g = x.add_mutually_exclusive_group()
+    g.add_argument("--at", "--send-at", dest="send_at", metavar="WHEN", help="schedule or reschedule draft send time")
+    g.add_argument("--unschedule", action="store_true", help="clear the draft's scheduled send time")
     x.add_argument("--json", action="store_true")
-    for name, helptext in (("send", "send a draft"), ("rm", "delete a draft")):
-        x = ds.add_parser(name, help=helptext)
-        x.add_argument("id", type=int)
-        x.add_argument("--yes", "-y", action="store_true")
-        x.add_argument("--json", action="store_true")
+    x = ds.add_parser("send", help="send a draft (or schedule it with --at)")
+    x.add_argument("id", type=int)
+    x.add_argument("--at", "--send-at", dest="send_at", metavar="WHEN",
+                   help="schedule draft to send at WHEN instead of immediately")
+    x.add_argument("--yes", "-y", action="store_true")
+    x.add_argument("--json", action="store_true")
+    x = ds.add_parser("schedule", help="schedule a draft to be sent at WHEN")
+    x.add_argument("id", type=int)
+    x.add_argument("send_at", metavar="WHEN", help="e.g. '30m', '2h', 'tomorrow 09:00', '2026-11-21T09:00'")
+    x.add_argument("--yes", "-y", action="store_true")
+    x.add_argument("--json", action="store_true")
+    x = ds.add_parser("unschedule", help="clear a draft's scheduled send time")
+    x.add_argument("id", type=int)
+    x.add_argument("--json", action="store_true")
+    x = ds.add_parser("rm", help="delete a draft")
+    x.add_argument("id", type=int)
+    x.add_argument("--yes", "-y", action="store_true")
+    x.add_argument("--json", action="store_true")
 
     p = sub.add_parser("folders", help="list folders, or create / rename / delete one")
     p.add_argument("--json", action="store_true")
@@ -92,6 +110,9 @@ def _show_draft(d: dict) -> None:
     for label, key in (("Cc", "cc"), ("Bcc", "bcc")):
         if d[key]:
             print(f"{label + ':':8} {', '.join(d[key])}")
+    if d.get("send_at"):
+        ref = f" (#{d['outbox_id']})" if d.get("outbox_id") else ""
+        print(f"Send at: {d['send_at']}{ref}")
     print(f"Subject: {d['subject']}\n\n{d['body']}")
     for a in d["attachments"]:
         print(f"\n📎 {a['filename']} ({a['content_type']}, {a['size']:,} bytes)")
@@ -137,21 +158,28 @@ def _drafts(args: argparse.Namespace, svc: Service) -> int:
                 return 2
             body = _editor(svc.get_draft(args.id)["body"] if body is None else body)
         inline = [compose.parse_inline_arg(raw) for raw in args.inline]
+        send_at = "" if getattr(args, "unschedule", False) else getattr(args, "send_at", None)
         res = svc.update_draft(
             args.id, source=_source(), to=args.to, cc=args.cc, bcc=args.bcc, subject=args.subject, body=body,
             html_body=read_html(args.html), add_attachments=args.attach or None,
             remove_attachments=args.detach or None, add_inline_images=inline or None,
-            remove_inline_images=args.remove_inline or None)
+            remove_inline_images=args.remove_inline or None, send_at=send_at)
         _result(args, res)
         return 0
+    if cmd == "unschedule":
+        _result(args, svc.update_draft(args.id, source=_source(), send_at=""))  # type: ignore[arg-type]
+        return 0
     human = _source() == "human"
+    when = getattr(args, "send_at", None)
     if human and not args.yes:
         _show_draft(svc.get_draft(args.id))
-        if not confirm("\nSend this draft?" if cmd == "send" else "\nDelete this draft?"):
+        prompt = (f"\nSchedule this draft for {when}?" if when
+                  else "\nSend this draft?" if cmd in ("send", "schedule") else "\nDelete this draft?")
+        if not confirm(prompt):
             info("cancelled")
             return 0
-    if cmd == "send":
-        _result(args, svc.send_draft(args.id, _source()))  # type: ignore[arg-type]
+    if cmd in ("send", "schedule"):
+        _result(args, svc.send_draft(args.id, _source(), send_at=when))  # type: ignore[arg-type]
     else:
         svc.delete_draft(args.id)
         emit_json({"deleted": args.id}) if args.json else info(f"deleted draft {args.id}")
@@ -192,12 +220,13 @@ def run(cmd: str, args: argparse.Namespace, svc: Service) -> int:
     draft.bcc += split_addrs(args.bcc)
     draft = apply_content(draft, args)
     human = _source() == "human"
+    send_at = getattr(args, "send_at", None)
     if not args.draft and human and not args.yes:
         info(f"To: {', '.join(draft.to)}  Subject: {draft.subject}")
-        if not confirm("Forward now?"):
+        if not confirm(f"Schedule forward for {send_at}?" if send_at else "Forward now?"):
             info("cancelled")
             return 0
     res = svc.forward(args.id, args.body or "", draft.to, source=_source(), send=not args.draft,  # type: ignore
-                      extras=lambda _d: draft, include_attachments=not args.no_attachments)
+                      extras=lambda _d: draft, include_attachments=not args.no_attachments, send_at=send_at)
     _result(args, res)
     return 0

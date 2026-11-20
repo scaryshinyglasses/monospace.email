@@ -45,6 +45,8 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         p.add_argument("--subject", default="")
         p.add_argument("--body", help="markdown body; omit to read stdin")
         add_content_args(p)
+        p.add_argument("--at", "--send-at", dest="send_at", metavar="WHEN",
+                       help="schedule send time (e.g. '30m', '2h', 'tomorrow 09:00', '2026-11-21T09:00')")
         p.add_argument("--yes", "-y", action="store_true", help="skip the confirmation prompt")
         p.add_argument("--json", action="store_true")
 
@@ -56,6 +58,8 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--bcc", action="append", default=[])
     add_content_args(p)
     p.add_argument("--draft", action="store_true", help="save to Drafts instead of sending")
+    p.add_argument("--at", "--send-at", dest="send_at", metavar="WHEN",
+                   help="schedule send time (e.g. '30m', '2h', 'tomorrow 09:00', '2026-11-21T09:00')")
     p.add_argument("--yes", "-y", action="store_true")
     p.add_argument("--json", action="store_true")
 
@@ -152,15 +156,17 @@ def _print_message(svc: Service, msg_id: int, args: argparse.Namespace) -> None:
 
 def submit(svc: Service, args: argparse.Namespace, draft: Draft, *, as_draft: bool) -> None:
     human = interactive()
+    send_at = getattr(args, "send_at", None)
     if as_draft:
-        res = svc.save_draft(args.account, draft, "human" if human else "ai")
+        res = svc.save_draft(args.account, draft, "human" if human else "ai", send_at=send_at)
     else:
         if human and not args.yes:
             info(f"To: {', '.join(draft.to)}  Subject: {draft.subject}")
-            if not confirm("Send now?"):
+            prompt = f"Schedule for {send_at}?" if send_at else "Send now?"
+            if not confirm(prompt):
                 info("cancelled")
                 return
-        res = svc.submit(args.account, draft, "human" if human else "ai")
+        res = svc.submit(args.account, draft, "human" if human else "ai", send_at=send_at)
     emit_json(res.to_dict()) if args.json else info(f"{res.status}: {res.detail}")
 
 

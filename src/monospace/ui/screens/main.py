@@ -26,6 +26,7 @@ class MainScreen(Screen):
         Binding("R", "reply(True)", "Reply all", show=False),
         Binding("f", "forward", "Forward", show=False),
         Binding("e", "edit_draft", "Edit draft", show=False),
+        Binding("S", "schedule_draft", "Schedule draft", show=False),
         Binding("N", "new_folder", "New folder", show=False),
         Binding("E", "rename_folder", "Rename folder", show=False),
         Binding("X", "delete_folder", "Delete folder", show=False),
@@ -138,10 +139,11 @@ class MainScreen(Screen):
         self._populate_tree()
 
     def _current(self) -> int | None:
+        cur = self.query_one(MessageList).current_id()
+        if cur is not None:
+            return cur
         reader = self.query_one(Reader)
-        if reader.envelope:
-            return reader.envelope.id
-        return self.query_one(MessageList).current_id()
+        return reader.envelope.id if reader.envelope else None
 
     # ---- actions -------------------------------------------------------
     def action_cursor(self, delta: int) -> None:
@@ -205,6 +207,18 @@ class MainScreen(Screen):
         if msg_id is None:
             return self.notify("Select a draft first (Drafts folder)")
         self.app.edit_draft(msg_id)  # type: ignore[attr-defined]
+
+    def action_schedule_draft(self) -> None:
+        msg_id = self._current()
+        if msg_id is None:
+            return self.notify("Select a draft first (Drafts folder)")
+        env = self.svc.envelope(msg_id)
+        if env.folder != self.svc.account(env.account).folder("drafts"):
+            return self.notify("Only messages in Drafts can be scheduled (press c to compose)", severity="warning")
+        self.app.push_screen(
+            PromptScreen("Schedule draft — send at (e.g. 30m, 2h, tomorrow 09:00, YYYY-MM-DD HH:MM):", "", "Schedule"),
+            lambda when: when and self.app.schedule_draft(msg_id, when),  # type: ignore[attr-defined]
+        )
 
     # ---- folders -------------------------------------------------------
     def action_new_folder(self) -> None:

@@ -70,19 +70,21 @@ def register(server: MCPServer, run: Run) -> None:
                            html_body: str | None = None, add_attachments: list[str] | None = None,
                            remove_attachments: list[str] | None = None,
                            add_inline_images: list[str | InlineImage] | None = None,
-                           remove_inline_images: list[str] | None = None) -> dict:
+                           remove_inline_images: list[str] | None = None,
+                           send_at: str | None = None) -> dict:
         """Edit a draft in place (it gets a new `draft_id` — use that afterwards). Omitted fields are kept.
         Attachments and inline images are separate: attachments are files the recipient downloads;
         inline images render inside the body (e.g. a logo). Reference one from markdown as
         `![Logo](logo.png)` or from HTML as `<img src="cid:logo.png">`; otherwise it is placed at
         `position` top/bottom. Passing `body` (markdown) without `html_body` re-renders the HTML.
         Remove items by file name. New files must be inside one of `readable_dirs` (list_accounts);
-        use them in place by absolute path."""
+        use them in place by absolute path. Pass `send_at` (e.g. '2h', 'tomorrow 09:00',
+        '2026-11-21T09:00') to schedule/reschedule the draft, or `send_at=""` to unschedule it."""
         return (await run(lambda s: s.update_draft(
             id, source="ai", to=to, cc=cc, bcc=bcc, subject=subject, body=body, html_body=html_body,
             add_attachments=add_attachments, remove_attachments=remove_attachments,
             add_inline_images=inline_arg(add_inline_images),
-            remove_inline_images=remove_inline_images))).to_dict()
+            remove_inline_images=remove_inline_images, send_at=send_at))).to_dict()
 
     @server.tool(annotations=DESTRUCTIVE)
     async def delete_draft(id: int) -> dict:
@@ -91,10 +93,17 @@ def register(server: MCPServer, run: Run) -> None:
         return {"deleted": id}
 
     @server.tool(annotations=WRITE)
-    async def send_draft(id: int) -> dict:
-        """Send a saved draft exactly as stored. Obeys ai_send: 'draft' leaves it for the human,
-        'confirm' queues it for approval, 'allow' sends it and removes the draft. Report `status`."""
-        return (await run(lambda s: s.send_draft(id, "ai"))).to_dict()
+    async def send_draft(id: int, send_at: str | None = None) -> dict:
+        """Send or schedule a saved draft exactly as stored. Pass `send_at` (e.g. '30m', '2h',
+        'tomorrow 09:00', '2026-11-21T09:00') to schedule future delivery instead of sending now.
+        Obeys ai_send: 'draft' leaves it for the human, 'confirm' queues it for approval, 'allow'
+        sends or schedules it and removes the draft when sent. Report `status`."""
+        return (await run(lambda s: s.send_draft(id, "ai", send_at=send_at))).to_dict()
+
+    @server.tool(annotations=WRITE)
+    async def reschedule(outbox_id: int, send_at: str) -> dict:
+        """Change the `send_at` time of a scheduled or pending outbox item (never approves a pending item)."""
+        return await run(lambda s: s.reschedule(outbox_id, send_at))
 
     @server.tool(annotations=WRITE)
     async def create_folder(name: str, account: str | None = None) -> list[dict]:
@@ -113,6 +122,6 @@ def register(server: MCPServer, run: Run) -> None:
 
     @server.tool(annotations=WRITE)
     async def outbox_cancel(outbox_id: int) -> dict:
-        """Withdraw a message you queued for approval (never sends; only a human can approve)."""
+        """Withdraw a message you queued for approval or cancel a scheduled message before it is sent."""
         await run(lambda s: s.outbox_cancel(outbox_id))
         return {"cancelled": outbox_id}

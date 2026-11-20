@@ -66,7 +66,7 @@ def register(server: MCPServer) -> None:
         """Run up to 20 READ-ONLY tool calls in one request, in order; returns one {tool, ok, result|error}
         per call. E.g. list_accounts + list_folders + list_tags + list_messages(...) + get_draft(...).
         Batchable: list_accounts, list_folders, list_messages, search, read_message (not mark_read),
-        get_draft, list_tags, outbox_list. Anything that writes is refused here — call it directly
+        get_draft, list_tags, outbox_list, schedule_list. Anything that writes is refused here — call it directly
         (mark / tag_message / untag_message already take id lists and `where`).
         A call can't use an earlier call's result; batch again once you've read it."""
         if len(calls) > MAX_CALLS:
